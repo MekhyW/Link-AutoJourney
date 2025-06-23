@@ -127,14 +127,6 @@ export default function Dashboard() {
               }`}></div>
               <span>{apiStatus?.status === 'connected' ? 'API Connected' : 'API Error'}</span>
             </div>
-            
-            {/* User Menu */}
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                <span className="text-gray-600 text-sm font-medium">HR</span>
-              </div>
-              <span className="text-sm font-medium">HR Admin</span>
-            </div>
           </div>
         </div>
       </header>
