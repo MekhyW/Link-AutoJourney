@@ -1,16 +1,7 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { 
-  ChartLine, 
-  BookOpen, 
-  Users, 
-  FileText, 
-  Settings,
-  FolderSync,
-  Bot
-} from "lucide-react";
+import { ChartLine, BookOpen, Users, FileText, Settings,FolderSync,Bot } from "lucide-react";
 
 interface SidebarProps {
   courses: any[];
@@ -25,7 +16,7 @@ export default function Sidebar({ courses, selectedCourseId, onCourseSelect, onS
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  const activeJob = jobs?.find((job: any) => job.status === 'processing');
+  const activeJob = Array.isArray(jobs) ? jobs.find((job: any) => job.status === 'processing') : undefined;
 
   const navItems = [
     { icon: ChartLine, label: "Dashboard", active: true },
@@ -144,7 +135,7 @@ export default function Sidebar({ courses, selectedCourseId, onCourseSelect, onS
         )}
 
         {/* Recent Jobs Status */}
-        {jobs && jobs.length > 0 && !activeJob && (
+        {Array.isArray(jobs) && jobs.length > 0 && !activeJob && (
           <div className="mt-8">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Recent Activity

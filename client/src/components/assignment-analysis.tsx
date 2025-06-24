@@ -6,12 +6,6 @@ interface AssignmentAnalysisProps {
 }
 
 export default function AssignmentAnalysis({ assignments }: AssignmentAnalysisProps) {
-  const getProgressColor = (score: number) => {
-    if (score >= 85) return "bg-accent";
-    if (score >= 75) return "bg-warning";
-    return "bg-orange-500";
-  };
-
   if (assignments.length === 0) {
     return (
       <Card className="shadow-sm border border-gray-200">
@@ -52,11 +46,7 @@ export default function AssignmentAnalysis({ assignments }: AssignmentAnalysisPr
                   <p className="text-xs text-gray-500">avg score</p>
                 </div>
                 <div className="w-16">
-                  <Progress 
-                    value={assignment.averageScore || 0} 
-                    className="h-2"
-                    // Custom styling would be applied here
-                  />
+                  <Progress value={assignment.averageScore || 0} className="h-2"/>
                 </div>
               </div>
             </div>

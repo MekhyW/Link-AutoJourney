@@ -4,13 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Calendar, Download, FileText, Check, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Calendar, Download, FileText, Check, AlertTriangle, Clock } from "lucide-react";
 import { Link } from "wouter";
+import type { Candidate, Submission } from "@/../../shared/schema";
+
+type CandidateWithSubmissions = Candidate & {
+  submissions?: (Submission & {
+    assignment?: {
+      name: string;
+    };
+  })[];
+};
 
 export default function CandidateDetail() {
   const { candidateId } = useParams();
 
-  const { data: candidate, isLoading } = useQuery({
+  const { data: candidate, isLoading } = useQuery<CandidateWithSubmissions>({
     queryKey: ["/api/candidates", candidateId],
   });
 
@@ -115,7 +124,7 @@ export default function CandidateDetail() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {candidate.submissions?.length > 0 ? (
+                  {(candidate.submissions && candidate.submissions.length > 0) ? (
                     candidate.submissions.map((submission: any) => (
                       <div key={submission.id} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -187,7 +196,7 @@ export default function CandidateDetail() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {candidate.strengths?.length > 0 ? (
+                  {(candidate.strengths && candidate.strengths.length > 0) ? (
                     candidate.strengths.map((skill: string, index: number) => (
                       <div key={index} className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">{skill}</span>
@@ -211,8 +220,8 @@ export default function CandidateDetail() {
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
-                  <Badge className={`${getStatusColor(candidate.status)} text-sm`}>
-                    {getStatusLabel(candidate.status)}
+                  <Badge className={`${getStatusColor(candidate.status || '')} text-sm`}>
+                    {getStatusLabel(candidate.status || '')}
                   </Badge>
                 </div>
                 
@@ -254,7 +263,7 @@ export default function CandidateDetail() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {candidate.weaknesses?.length > 0 ? (
+                  {(candidate.weaknesses && candidate.weaknesses.length > 0) ? (
                     <ul className="text-sm text-gray-700 space-y-1">
                       {candidate.weaknesses.map((area: string, index: number) => (
                         <li key={index} className="flex items-start space-x-2">

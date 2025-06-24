@@ -24,12 +24,12 @@ export default function AIInsights({ candidates }: AIInsightsProps) {
     return acc;
   }, {} as Record<string, number>);
 
-  const topStrengths = Object.entries(strengthCounts)
+  const topStrengths = (Object.entries(strengthCounts) as [string, number][])
     .sort(([,a], [,b]) => b - a)
     .slice(0, 3)
     .map(([skill, count]) => ({ skill, percentage: Math.round((count / totalCandidates) * 100) }));
 
-  const topWeaknesses = Object.entries(weaknessCounts)
+  const topWeaknesses = (Object.entries(weaknessCounts) as [string, number][])
     .sort(([,a], [,b]) => b - a)
     .slice(0, 3)
     .map(([skill, count]) => ({ skill, percentage: Math.round((count / totalCandidates) * 100) }));

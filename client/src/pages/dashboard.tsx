@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { GraduationCap, Filter, Download, Search } from "lucide-react";
+import { GraduationCap, Download, Search } from "lucide-react";
 
 export default function Dashboard() {
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -37,9 +37,9 @@ export default function Dashboard() {
     refetchInterval: 30000, // Check every 30 seconds
   });
 
-  const selectedCourse = courses?.find((course: any) => course.id === selectedCourseId);
+  const selectedCourse = Array.isArray(courses) ? courses.find((course: any) => course.id === selectedCourseId) : undefined;
 
-  const filteredCandidates = candidates?.filter((candidate: any) => {
+  const filteredCandidates = (candidates as any[] || []).filter((candidate: any) => {
     const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          candidate.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || candidate.status === statusFilter;
@@ -57,7 +57,7 @@ export default function Dashboard() {
     } catch (error) {
       toast({
         title: "Sync Failed", 
-        description: error.message,
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
       });
     }
@@ -76,7 +76,7 @@ export default function Dashboard() {
     } catch (error) {
       toast({
         title: "Analysis Failed",
-        description: error.message,
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
       });
     }
@@ -118,14 +118,14 @@ export default function Dashboard() {
           <div className="flex items-center space-x-4">
             {/* API Status */}
             <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-              apiStatus?.status === 'connected' 
+              (apiStatus as { status: string })?.status === 'connected'
                 ? 'bg-green-50 text-green-700' 
                 : 'bg-red-50 text-red-700'
             }`}>
               <div className={`w-2 h-2 rounded-full ${
-                apiStatus?.status === 'connected' ? 'bg-green-500' : 'bg-red-500'
+(apiStatus as { status: string })?.status === 'connected' ? 'bg-green-500' : 'bg-red-500'
               }`}></div>
-              <span>{apiStatus?.status === 'connected' ? 'API Connected' : 'API Error'}</span>
+              <span>{(apiStatus as { status: string })?.status === 'connected' ? 'API Connected' : 'API Error'}</span>
             </div>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function Dashboard() {
       <div className="flex h-screen">
         {/* Sidebar */}
         <Sidebar 
-          courses={courses || []}
+          courses={Array.isArray(courses) ? courses : []}
           selectedCourseId={selectedCourseId}
           onCourseSelect={setSelectedCourseId}
           onSyncCourses={handleSyncCourses}
@@ -148,7 +148,7 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Candidate Analysis Dashboard</h2>
                 <p className="text-sm text-gray-500">
-                  {selectedCourse ? `${selectedCourse.name} • ${candidates?.length || 0} candidates` : 'Select a course to begin'}
+                  {selectedCourse ? `${selectedCourse.name} • ${Array.isArray(candidates) ? candidates.length : 0} candidates` : 'Select a course to begin'}
                 </p>
               </div>
               <div className="flex items-center space-x-3">
@@ -167,8 +167,8 @@ export default function Dashboard() {
             <div className="p-6">
               {/* Stats Cards */}
               <StatsCards 
-                candidates={candidates || []}
-                assignments={assignments || []}
+                candidates={Array.isArray(candidates) ? candidates : []}
+                assignments={Array.isArray(assignments) ? assignments : []}
               />
 
               {/* Search and Filter Controls */}
@@ -211,8 +211,8 @@ export default function Dashboard() {
 
               {/* Assignment Analysis and AI Insights */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <AssignmentAnalysis assignments={assignments || []} />
-                <AIInsights candidates={candidates || []} />
+                <AssignmentAnalysis assignments={Array.isArray(assignments) ? assignments : []} />
+                <AIInsights candidates={Array.isArray(candidates) ? candidates : []} />
               </div>
             </div>
           ) : (
@@ -223,7 +223,7 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500 mb-4">
                   Choose a course from the sidebar to view candidate analysis
                 </p>
-                {(!courses || courses.length === 0) && (
+                {(!courses || !Array.isArray(courses) || courses.length === 0) && (
                   <Button onClick={handleSyncCourses}>
                     Sync Courses from Canvas
                   </Button>
