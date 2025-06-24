@@ -195,6 +195,33 @@ async function processCourseSync(jobId: number) {
       const assignments = await canvasAPI.getCourseAssignments(canvasCourse._id);
       await storage.updateCourse(course.id, { assignmentCount: assignments.length });
 
+      // Sync students (candidates) for this course
+      const students = await canvasAPI.getCourseStudents(canvasCourse._id);
+      console.log(`Found ${students.length} students in course ${canvasCourse.name}`);
+
+      for (const student of students) {
+        let candidate = await storage.getCandidateByCanvasUserId(student.id);
+        
+        if (!candidate) {
+          candidate = await storage.createCandidate({
+            canvasUserId: student.id,
+            name: student.name,
+            email: student.email,
+            courseId: course.id,
+            status: "in_progress"
+          });
+          console.log(`Created candidate: ${student.name} (${student.email})`);
+        } else {
+          // Update existing candidate info
+          await storage.updateCandidate(candidate.id, {
+            name: student.name,
+            email: student.email,
+            courseId: course.id
+          });
+          console.log(`Updated candidate: ${student.name} (${student.email})`);
+        }
+      }
+
       for (const canvasAssignment of assignments) {
         let assignment = await storage.getAssignmentByCanvasId(canvasAssignment._id);
         

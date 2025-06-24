@@ -34,6 +34,30 @@ interface Assignment {
   }>;
 }
 
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  short_name?: string;
+  login_id?: string;
+  avatar_url?: string;
+  enrollments?: Array<{
+    id: string;
+    user_id: string;
+    course_id: string;
+    type: string;
+    enrollment_state: string;
+    grades?: {
+      current_score?: number;
+      final_score?: number;
+      current_grade?: string;
+      final_grade?: string;
+    };
+  }>;
+}
+
 interface Submission {
   id: string;
   _id: string;
@@ -148,6 +172,48 @@ export class CanvasAPIService {
       assignment.submissionTypes.includes('online_upload') || 
       assignment.submissionTypes.includes('online_text_entry')
     );
+  }
+
+  async getCourseStudents(courseId: string): Promise<User[]> {
+    if (!this.config.apiKey) {
+      throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
+    }
+    
+    const response = await fetch(
+      `${this.config.baseUrl}/api/v1/courses/${courseId}/users?enrollment_type[]=student&include[]=enrollments&include[]=email&per_page=100`, 
+      {
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const users = await response.json();
+    return users.map((user: any) => ({
+      id: user.id.toString(),
+      name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+      email: user.email || user.login_id || '',
+      first_name: user.first_name,
+      last_name: user.last_name,
+      short_name: user.short_name,
+      login_id: user.login_id,
+      avatar_url: user.avatar_url,
+      enrollments: user.enrollments?.map((enrollment: any) => ({
+        id: enrollment.id.toString(),
+        user_id: enrollment.user_id.toString(),
+        course_id: enrollment.course_id.toString(),
+        type: enrollment.type,
+        enrollment_state: enrollment.enrollment_state,
+        grades: enrollment.grades
+      })) || []
+    }));
   }
 
   async getAssignmentSubmissions(courseId: string, assignmentId: string): Promise<Submission[]> {
