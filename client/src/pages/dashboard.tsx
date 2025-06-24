@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { GraduationCap, Download, Search } from "lucide-react";
 
 export default function Dashboard() {
@@ -18,8 +18,9 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const { toast } = useToast();
 
-  const { data: courses, isLoading: coursesLoading } = useQuery({
+  const { data: courses, isLoading: coursesLoading, refetch: refetchCourses } = useQuery({
     queryKey: ["/api/courses"],
+    refetchInterval: 10000, // Refetch every 10 seconds
   });
 
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
@@ -50,6 +51,10 @@ export default function Dashboard() {
     try {
       const response = await apiRequest("POST", "/api/sync/courses");
       const data = await response.json();
+      
+      // Invalidate courses query to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/courses"] });
+      
       toast({
         title: "Sync Started",
         description: "Course synchronization has begun. Check the processing status in the sidebar.",
