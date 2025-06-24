@@ -3,11 +3,6 @@ interface CanvasConfig {
   apiKey: string;
 }
 
-interface GraphQLResponse<T> {
-  data: T;
-  errors?: Array<{ message: string }>;
-}
-
 interface Course {
   id: string;
   _id: string;
@@ -84,7 +79,6 @@ export class CanvasAPIService {
       baseUrl: process.env.CANVAS_BASE_URL || 'https://linkschool.instructure.com',
       apiKey: process.env.CANVAS_API_KEY || ''
     };
-
     if (!this.config.apiKey) {
       console.warn('Canvas API key not configured. Add CANVAS_API_KEY to secrets to enable Canvas integration.');
     } else {
@@ -92,58 +86,22 @@ export class CanvasAPIService {
     }
   }
 
-  private async makeGraphQLRequest<T>(query: string, variables: Record<string, any> = {}): Promise<T> {
-    if (!this.config.apiKey) {
-      throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
-    }
-
-    const response = await fetch(`${this.config.baseUrl}/api/graphql`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Canvas API Error: ${response.status} ${response.statusText}`, errorText);
-      throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}. Please verify your Canvas API key and URL.`);
-    }
-
-    const result: GraphQLResponse<T> = await response.json();
-
-    if (result.errors) {
-      console.error('GraphQL errors:', result.errors);
-      throw new Error(`GraphQL errors: ${result.errors.map(e => e.message).join(', ')}. Please check your Canvas API permissions.`);
-    }
-
-    return result.data;
-  }
-
   async getCourses(): Promise<Course[]> {
-    // Canvas GraphQL API has specific schema - let's use a simpler approach
     if (!this.config.apiKey) {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
-
-    // Use REST API instead of GraphQL for better compatibility
-    const response = await fetch(`${this.config.baseUrl}/api/v1/courses?enrollment_type=teacher&state[]=available`, {
+    const response = await fetch(`${this.config.baseUrl}/api/v1/courses`, {
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
       },
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
       throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}. Please verify your Canvas API key.`);
     }
-
     const courses = await response.json();
-    
     return courses.map((course: any) => ({
       id: course.id.toString(),
       _id: course.id.toString(),
@@ -160,22 +118,18 @@ export class CanvasAPIService {
     if (!this.config.apiKey) {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
-
     const response = await fetch(`${this.config.baseUrl}/api/v1/courses/${courseId}/assignments?include[]=rubric`, {
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
       },
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
       throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
     }
-
     const assignments = await response.json();
-    
     return assignments.map((assignment: any) => ({
       id: assignment.id.toString(),
       _id: assignment.id.toString(),
@@ -208,22 +162,18 @@ export class CanvasAPIService {
     if (!this.config.apiKey) {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
-
     const response = await fetch(`${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment`, {
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
       },
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
       throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
     }
-
     const submissions = await response.json();
-    
     return submissions.map((submission: any) => ({
       id: submission.id.toString(),
       _id: submission.id.toString(),
@@ -266,11 +216,9 @@ export class CanvasAPIService {
         'Authorization': `Bearer ${this.config.apiKey}`,
       },
     });
-
     if (!response.ok) {
       throw new Error(`Failed to download attachment: ${response.status} ${response.statusText}`);
     }
-
     return Buffer.from(await response.arrayBuffer());
   }
 }
