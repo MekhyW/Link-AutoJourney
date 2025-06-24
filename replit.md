@@ -72,6 +72,9 @@ Required environment variables:
 - **2025-01-24**: Fixed course sync caching issues and prevented data mixing in candidate table
 - **2025-01-24**: Improved Canvas API integration to fetch rubric data with assignments
 - **2025-01-24**: Resolved storage persistence errors and optimized query refresh intervals
+- **2025-01-24**: Added Canvas Users API integration to fetch enrolled students as candidates
+- **2025-01-24**: Fixed React Query URL construction and candidate filtering logic
+- **2025-01-24**: Successfully syncing students from "Jornada Link 2025.2" course as candidates
 
 ## Technical Notes
 - Uses Canvas REST API v1 for reliable data access

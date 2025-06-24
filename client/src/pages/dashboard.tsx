@@ -41,9 +41,13 @@ export default function Dashboard() {
   const selectedCourse = Array.isArray(courses) ? courses.find((course: any) => course.id === selectedCourseId) : undefined;
 
   const filteredCandidates = (Array.isArray(candidates) ? candidates : []).filter((candidate: any) => {
-    // Ensure we only filter actual candidate objects, not course objects
-    if (!candidate || !candidate.name || !candidate.email || candidate.canvasId) {
-      return false; // Skip if it's not a proper candidate (canvasId suggests it's a course)
+    // Ensure we have a proper candidate object with required fields
+    if (!candidate || !candidate.name || !candidate.email) {
+      return false;
+    }
+    // Skip course objects - courses have canvasId but candidates have canvasUserId
+    if (candidate.canvasId && !candidate.canvasUserId) {
+      return false;
     }
     const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          candidate.email.toLowerCase().includes(searchTerm.toLowerCase());
