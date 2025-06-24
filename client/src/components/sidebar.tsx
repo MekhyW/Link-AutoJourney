@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ChartLine, BookOpen, Users, FileText, Settings,FolderSync,Bot } from "lucide-react";
+import { BookOpen, FolderSync, Bot } from "lucide-react";
 
 interface SidebarProps {
   courses: any[];
@@ -18,14 +18,6 @@ export default function Sidebar({ courses, selectedCourseId, onCourseSelect, onS
 
   const activeJob = Array.isArray(jobs) ? jobs.find((job: any) => job.status === 'processing') : undefined;
 
-  const navItems = [
-    { icon: ChartLine, label: "Dashboard", active: true },
-    { icon: BookOpen, label: "Courses", active: false },
-    { icon: Users, label: "Candidates", active: false },
-    { icon: FileText, label: "Reports", active: false },
-    { icon: Settings, label: "Settings", active: false },
-  ];
-
   const getCourseStatusColor = (course: any) => {
     if (!course.isActive) return "bg-gray-400";
     if (course.assignmentCount === 0) return "bg-yellow-400";
@@ -35,23 +27,6 @@ export default function Sidebar({ courses, selectedCourseId, onCourseSelect, onS
   return (
     <aside className="w-72 bg-white shadow-sm border-r border-gray-200 overflow-y-auto">
       <nav className="p-6">
-        <div className="space-y-1 mb-8">
-          {navItems.map((item, index) => (
-            <a
-              key={index}
-              href="#"
-              className={`flex items-center space-x-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                item.active
-                  ? "text-primary bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </a>
-          ))}
-        </div>
-
         {/* Course Selection */}
         <div>
           <div className="flex items-center justify-between mb-3">
