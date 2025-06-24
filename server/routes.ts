@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { canvasAPI } from "./services/canvas-api";
 import { aiAnalysis } from "./services/ai-analysis";
-import { insertCourseSchema, insertCandidateSchema, insertAssignmentSchema, insertSubmissionSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Canvas API status
@@ -87,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       });
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -98,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assignments = await storage.getAssignments(courseId);
       res.json(assignments);
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -152,7 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobs = await storage.getProcessingJobs();
       res.json(jobs.slice(-10)); // Return last 10 jobs
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -228,7 +227,7 @@ async function processCourseSync(jobId: number) {
   } catch (error) {
     await storage.updateProcessingJob(jobId, { 
       status: "failed",
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 }
@@ -405,7 +404,7 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
   } catch (error) {
     await storage.updateProcessingJob(jobId, { 
       status: "failed",
-      error: error.message 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 }

@@ -1,5 +1,4 @@
-import { 
-  courses, candidates, assignments, submissions, processingJobs,
+import {
   type Course, type InsertCourse,
   type Candidate, type InsertCandidate,
   type Assignment, type InsertAssignment,
@@ -82,7 +81,6 @@ export class MemStorage implements IStorage {
   async updateCourse(id: number, updates: Partial<Course>): Promise<Course> {
     const existing = this.courses.get(id);
     if (!existing) throw new Error(`Course with id ${id} not found`);
-    
     const updated = { ...existing, ...updates };
     this.courses.set(id, updated);
     return updated;
@@ -125,7 +123,6 @@ export class MemStorage implements IStorage {
   async updateCandidate(id: number, updates: Partial<Candidate>): Promise<Candidate> {
     const existing = this.candidates.get(id);
     if (!existing) throw new Error(`Candidate with id ${id} not found`);
-    
     const updated = { ...existing, ...updates, updatedAt: new Date() };
     this.candidates.set(id, updated);
     return updated;
@@ -168,7 +165,6 @@ export class MemStorage implements IStorage {
   async updateAssignment(id: number, updates: Partial<Assignment>): Promise<Assignment> {
     const existing = this.assignments.get(id);
     if (!existing) throw new Error(`Assignment with id ${id} not found`);
-    
     const updated = { ...existing, ...updates };
     this.assignments.set(id, updated);
     return updated;
@@ -177,15 +173,12 @@ export class MemStorage implements IStorage {
   // Submission operations
   async getSubmissions(filters?: { assignmentId?: number; candidateId?: number }): Promise<Submission[]> {
     let submissions = Array.from(this.submissions.values());
-    
     if (filters?.assignmentId) {
       submissions = submissions.filter(s => s.assignmentId === filters.assignmentId);
     }
-    
     if (filters?.candidateId) {
       submissions = submissions.filter(s => s.candidateId === filters.candidateId);
     }
-    
     return submissions;
   }
 
@@ -258,7 +251,6 @@ export class MemStorage implements IStorage {
   async updateProcessingJob(id: number, updates: Partial<ProcessingJob>): Promise<ProcessingJob> {
     const existing = this.processingJobs.get(id);
     if (!existing) throw new Error(`Processing job with id ${id} not found`);
-    
     const updated = { ...existing, ...updates, updatedAt: new Date() };
     this.processingJobs.set(id, updated);
     return updated;

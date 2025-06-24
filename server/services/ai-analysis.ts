@@ -75,7 +75,6 @@ export class AIAnalysisService {
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
-      // "claude-sonnet-4-20250514"
       model: DEFAULT_MODEL_STR,
     });
 
@@ -86,7 +85,7 @@ export class AIAnalysisService {
       }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
-      throw new Error(`Failed to parse AI response: ${error.message}`);
+      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
     }
   }
 
@@ -94,7 +93,6 @@ export class AIAnalysisService {
     this.ensureAPIKey();
 
     const response = await anthropic.messages.create({
-      // "claude-sonnet-4-20250514"
       model: DEFAULT_MODEL_STR,
       max_tokens: 2048,
       messages: [{
@@ -144,7 +142,7 @@ export class AIAnalysisService {
       }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
-      throw new Error(`Failed to parse AI response: ${error.message}`);
+      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
     }
   }
 
@@ -180,7 +178,6 @@ export class AIAnalysisService {
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
-      // "claude-sonnet-4-20250514"
       model: DEFAULT_MODEL_STR,
     });
 
@@ -191,7 +188,7 @@ export class AIAnalysisService {
       }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
-      throw new Error(`Failed to parse AI response: ${error.message}`);
+      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
     }
   }
 
@@ -236,7 +233,6 @@ export class AIAnalysisService {
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
-      // "claude-sonnet-4-20250514"
       model: DEFAULT_MODEL_STR,
     });
 
@@ -247,7 +243,7 @@ export class AIAnalysisService {
       }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
-      throw new Error(`Failed to parse AI response: ${error.message}`);
+      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}}`);
     }
   }
 
