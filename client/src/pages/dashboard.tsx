@@ -40,12 +40,16 @@ export default function Dashboard() {
 
   const selectedCourse = Array.isArray(courses) ? courses.find((course: any) => course.id === selectedCourseId) : undefined;
 
-  const filteredCandidates = (candidates as any[] || []).filter((candidate: any) => {
+  const filteredCandidates = (Array.isArray(candidates) ? candidates : []).filter((candidate: any) => {
+    // Ensure we only filter actual candidate objects, not course objects
+    if (!candidate || !candidate.name || !candidate.email || candidate.canvasId) {
+      return false; // Skip if it's not a proper candidate (canvasId suggests it's a course)
+    }
     const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          candidate.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || candidate.status === statusFilter;
     return matchesSearch && matchesStatus;
-  }) || [];
+  });
 
   const handleSyncCourses = async () => {
     try {

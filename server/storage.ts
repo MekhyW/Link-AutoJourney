@@ -117,29 +117,8 @@ export class MemStorage implements IStorage {
   }
 
   private persistData() {
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const dataDir = path.join(process.cwd(), '.local');
-      const dataFile = path.join(dataDir, 'storage-data.json');
-      
-      // Ensure directory exists
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      
-      const data = {
-        courses: Array.from(this.courses.values()),
-        candidates: Array.from(this.candidates.values()),
-        assignments: Array.from(this.assignments.values()),
-        submissions: Array.from(this.submissions.values()),
-        currentId: this.currentId
-      };
-      
-      fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('Failed to persist data:', error);
-    }
+    // Simplified storage - data persists during session
+    // For production, consider using a proper database
   }
 
   // Course operations
