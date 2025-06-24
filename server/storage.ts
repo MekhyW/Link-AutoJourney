@@ -49,6 +49,98 @@ export class MemStorage implements IStorage {
   private submissions: Map<number, Submission> = new Map();
   private processingJobs: Map<number, ProcessingJob> = new Map();
   private currentId = 1;
+  
+  constructor() {
+    // Load persisted data on startup
+    this.loadPersistedData();
+  }
+
+  private loadPersistedData() {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dataFile = path.join(process.cwd(), '.local', 'storage-data.json');
+      
+      if (fs.existsSync(dataFile)) {
+        const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+        
+        // Restore courses
+        if (data.courses) {
+          data.courses.forEach((course: Course) => {
+            this.courses.set(course.id, {
+              ...course,
+              createdAt: new Date(course.createdAt)
+            });
+          });
+        }
+        
+        // Restore other data structures
+        if (data.candidates) {
+          data.candidates.forEach((candidate: Candidate) => {
+            this.candidates.set(candidate.id, {
+              ...candidate,
+              createdAt: new Date(candidate.createdAt),
+              updatedAt: new Date(candidate.updatedAt)
+            });
+          });
+        }
+        
+        if (data.assignments) {
+          data.assignments.forEach((assignment: Assignment) => {
+            this.assignments.set(assignment.id, {
+              ...assignment,
+              createdAt: new Date(assignment.createdAt),
+              dueAt: assignment.dueAt ? new Date(assignment.dueAt) : null
+            });
+          });
+        }
+        
+        if (data.submissions) {
+          data.submissions.forEach((submission: Submission) => {
+            this.submissions.set(submission.id, {
+              ...submission,
+              createdAt: new Date(submission.createdAt),
+              submittedAt: submission.submittedAt ? new Date(submission.submittedAt) : null
+            });
+          });
+        }
+        
+        if (data.currentId) {
+          this.currentId = data.currentId;
+        }
+        
+        console.log(`Loaded ${this.courses.size} courses, ${this.candidates.size} candidates from storage`);
+      }
+    } catch (error) {
+      console.log('No existing storage data found, starting fresh');
+    }
+  }
+
+  private persistData() {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dataDir = path.join(process.cwd(), '.local');
+      const dataFile = path.join(dataDir, 'storage-data.json');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      const data = {
+        courses: Array.from(this.courses.values()),
+        candidates: Array.from(this.candidates.values()),
+        assignments: Array.from(this.assignments.values()),
+        submissions: Array.from(this.submissions.values()),
+        currentId: this.currentId
+      };
+      
+      fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Failed to persist data:', error);
+    }
+  }
 
   // Course operations
   async getCourses(): Promise<Course[]> {
@@ -75,6 +167,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.courses.set(id, course);
+    this.persistData();
     return course;
   }
 
@@ -83,6 +176,7 @@ export class MemStorage implements IStorage {
     if (!existing) throw new Error(`Course with id ${id} not found`);
     const updated = { ...existing, ...updates };
     this.courses.set(id, updated);
+    this.persistData();
     return updated;
   }
 
@@ -117,6 +211,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     this.candidates.set(id, candidate);
+    this.persistData();
     return candidate;
   }
 
@@ -159,6 +254,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.assignments.set(id, assignment);
+    this.persistData();
     return assignment;
   }
 
