@@ -22,20 +22,16 @@ interface Assignment {
   pointsPossible: number;
   dueAt: string;
   submissionTypes: string[];
-  rubric?: {
+  rubric?: Array<{
     id: string;
-    title: string;
-    criteria: Array<{
+    description: string;
+    points: number;
+    ratings: Array<{
       id: string;
       description: string;
       points: number;
-      ratings: Array<{
-        id: string;
-        description: string;
-        points: number;
-      }>;
     }>;
-  };
+  }>;
 }
 
 interface Submission {
@@ -138,20 +134,16 @@ export class CanvasAPIService {
       pointsPossible: assignment.points_possible,
       dueAt: assignment.due_at,
       submissionTypes: assignment.submission_types || [],
-      rubric: assignment.rubric ? {
-        id: assignment.rubric.id?.toString() || '',
-        title: assignment.rubric.title || '',
-        criteria: assignment.rubric.criteria?.map((criterion: any) => ({
-          id: criterion._id || criterion.id || '',
-          description: criterion.description || '',
-          points: criterion.points || 0,
-          ratings: criterion.ratings?.map((rating: any) => ({
-            id: rating._id || rating.id || '',
-            description: rating.description || '',
-            points: rating.points || 0
-          })) || []
+      rubric: assignment.rubric?.map((criterion: any) => ({
+        id: criterion._id || criterion.id || '',
+        description: criterion.description || '',
+        points: criterion.points || 0,
+        ratings: criterion.ratings?.map((rating: any) => ({
+          id: rating._id || rating.id || '',
+          description: rating.description || '',
+          points: rating.points || 0
         })) || []
-      } : undefined
+      })) || undefined
     })).filter((assignment: any) => 
       assignment.submissionTypes.includes('online_upload') || 
       assignment.submissionTypes.includes('online_text_entry')

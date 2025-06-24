@@ -305,8 +305,9 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
         const assignmentContext = `${assignment.name}: ${assignment.description}`;
 
         if (submission.content) {
-          // Analyze text content
-          analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext);
+          // Analyze text content using rubric if available
+          const rubricCriteria = assignment.rubricData || undefined;
+          analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
         } else if (submission.attachments && submission.attachments.length > 0) {
           // For now, just provide basic analysis for attachments
           analysis = {

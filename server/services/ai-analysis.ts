@@ -16,15 +16,33 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+export interface RubricCriteria {
+  id: string;
+  description: string;
+  points: number;
+  ratings: Array<{
+    id: string;
+    description: string;
+    points: number;
+  }>;
+}
+
+export interface RubricAssessment {
+  criteriaId: string;
+  points: number;
+  comments?: string;
+  ratingDescription: string;
+}
+
 export interface SubmissionAnalysis {
   summary: string;
   strengths: string[];
   improvements: string[];
   skillsIdentified: string[];
   confidence: number;
-  technicalQuality: number;
-  creativity: number;
-  completeness: number;
+  rubricAssessments?: RubricAssessment[];
+  overallRubricScore?: number;
+  maxPossibleScore?: number;
 }
 
 export interface CandidateInsights {
@@ -43,33 +61,54 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeTextSubmission(content: string, assignmentContext: string): Promise<SubmissionAnalysis> {
+  async analyzeTextSubmission(
+    content: string, 
+    assignmentContext: string, 
+    rubricCriteria?: RubricCriteria[]
+  ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
 
+    const rubricSection = rubricCriteria ? `
+    RUBRIC CRITERIA:
+    ${rubricCriteria.map(criteria => `
+    ${criteria.description} (${criteria.points} points max):
+    ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
+    `).join('\n')}
+    
+    Please evaluate this submission against each rubric criteria and provide specific scores and feedback.
+    ` : '';
+
     const prompt = `
-    You are an expert technical evaluator analyzing a student's code submission for a programming bootcamp. 
+    You are an expert evaluator analyzing a student's submission. 
     
     Assignment Context: ${assignmentContext}
+    ${rubricSection}
     
     Student Submission:
     ${content}
     
-    Please analyze this submission and provide a comprehensive evaluation. Focus on:
-    1. Code quality and structure
-    2. Technical implementation
-    3. Problem-solving approach
-    4. Best practices usage
-    5. Areas for improvement
+    ${rubricCriteria ? `
+    Analyze this submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission and provide specific feedback.
+    
+    Respond with a JSON object containing:
+    - summary: A brief overall assessment
+    - strengths: Array of specific strengths identified
+    - improvements: Array of areas that need improvement  
+    - skillsIdentified: Array of skills demonstrated
+    - confidence: Confidence score of your analysis (0-1)
+    - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
+    - overallRubricScore: Total points earned
+    - maxPossibleScore: Maximum possible points
+    ` : `
+    Provide a general analysis focusing on content quality, understanding demonstrated, and areas for improvement.
     
     Respond with a JSON object containing:
     - summary: A brief overall assessment
     - strengths: Array of specific strengths identified
     - improvements: Array of areas that need improvement
-    - skillsIdentified: Array of technical skills demonstrated
+    - skillsIdentified: Array of skills demonstrated  
     - confidence: Confidence score of your analysis (0-1)
-    - technicalQuality: Technical quality score (0-100)
-    - creativity: Creativity/innovation score (0-100)
-    - completeness: How complete the solution is (0-100)
+    `}
     `;
 
     const message = await anthropic.messages.create({
@@ -89,7 +128,11 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeImageSubmission(base64Image: string, assignmentContext: string): Promise<SubmissionAnalysis> {
+  async analyzeImageSubmission(
+    base64Image: string, 
+    assignmentContext: string, 
+    rubricCriteria?: RubricCriteria[]
+  ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
 
     const response = await anthropic.messages.create({
@@ -101,16 +144,19 @@ export class AIAnalysisService {
           {
             type: "text",
             text: `
-            You are analyzing a visual submission (design, diagram, or screenshot) for a programming bootcamp assignment.
+            You are analyzing a visual submission for an assignment.
             
             Assignment Context: ${assignmentContext}
+            ${rubricCriteria ? `
+            RUBRIC CRITERIA:
+            ${rubricCriteria.map(criteria => `
+            ${criteria.description} (${criteria.points} points max):
+            ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
+            `).join('\n')}
+            ` : ''}
             
-            Please analyze this image submission and provide detailed feedback. Consider:
-            1. Visual design quality
-            2. User interface/experience principles
-            3. Technical implementation visible
-            4. Creativity and innovation
-            5. Completeness of the solution
+            ${rubricCriteria ? `
+            Analyze this image submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission.
             
             Respond with a JSON object containing:
             - summary: A brief overall assessment
@@ -118,9 +164,19 @@ export class AIAnalysisService {
             - improvements: Array of areas that need improvement
             - skillsIdentified: Array of skills demonstrated
             - confidence: Confidence score of your analysis (0-1)
-            - technicalQuality: Technical quality score (0-100)
-            - creativity: Creativity/innovation score (0-100)
-            - completeness: How complete the solution appears (0-100)
+            - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
+            - overallRubricScore: Total points earned
+            - maxPossibleScore: Maximum possible points
+            ` : `
+            Please analyze this image submission and provide detailed feedback.
+            
+            Respond with a JSON object containing:
+            - summary: A brief overall assessment
+            - strengths: Array of specific strengths identified
+            - improvements: Array of areas that need improvement
+            - skillsIdentified: Array of skills demonstrated
+            - confidence: Confidence score of your analysis (0-1)
+            `}
             `
           },
           {
@@ -146,23 +202,32 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeDocumentSubmission(content: string, assignmentContext: string): Promise<SubmissionAnalysis> {
+  async analyzeDocumentSubmission(
+    content: string, 
+    assignmentContext: string, 
+    rubricCriteria?: RubricCriteria[]
+  ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
 
+    const rubricSection = rubricCriteria ? `
+    RUBRIC CRITERIA:
+    ${rubricCriteria.map(criteria => `
+    ${criteria.description} (${criteria.points} points max):
+    ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
+    `).join('\n')}
+    ` : '';
+
     const prompt = `
-    You are analyzing a document submission (PDF content, Word doc, etc.) for a programming bootcamp assignment.
+    You are analyzing a document submission for an assignment.
     
     Assignment Context: ${assignmentContext}
+    ${rubricSection}
     
     Document Content:
     ${content}
     
-    Please analyze this document submission focusing on:
-    1. Technical understanding demonstrated
-    2. Communication clarity
-    3. Problem-solving methodology
-    4. Documentation quality
-    5. Completeness of response
+    ${rubricCriteria ? `
+    Analyze this document submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission and provide specific feedback.
     
     Respond with a JSON object containing:
     - summary: A brief overall assessment
@@ -170,9 +235,19 @@ export class AIAnalysisService {
     - improvements: Array of areas that need improvement
     - skillsIdentified: Array of skills demonstrated
     - confidence: Confidence score of your analysis (0-1)
-    - technicalQuality: Technical quality score (0-100)
-    - creativity: Creativity/innovation score (0-100)
-    - completeness: How complete the solution is (0-100)
+    - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
+    - overallRubricScore: Total points earned
+    - maxPossibleScore: Maximum possible points
+    ` : `
+    Please analyze this document submission focusing on content quality, understanding demonstrated, and areas for improvement.
+    
+    Respond with a JSON object containing:
+    - summary: A brief overall assessment
+    - strengths: Array of specific strengths identified
+    - improvements: Array of areas that need improvement
+    - skillsIdentified: Array of skills demonstrated
+    - confidence: Confidence score of your analysis (0-1)
+    `}
     `;
 
     const message = await anthropic.messages.create({

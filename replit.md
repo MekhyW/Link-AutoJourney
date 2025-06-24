@@ -66,12 +66,12 @@ Required environment variables:
 - Prefer comprehensive candidate reports over summary data
 
 ## Recent Changes
-- **2025-06-23**: Successfully connected to linkschool.instructure.com Canvas instance
-- **2025-06-23**: Migrated from GraphQL to REST API for better Canvas compatibility
-- **2025-06-23**: Completed course synchronization with 2 active courses imported
-- **2025-06-23**: Fixed Canvas API authentication and data mapping
-- **2025-06-23**: Implemented comprehensive error handling and logging
-- **2025-06-23**: Validated end-to-end Canvas integration workflow
+- **2025-01-24**: Successfully migrated project from Replit Agent to Replit environment
+- **2025-01-24**: Enhanced AI analysis to use actual Canvas assignment rubrics instead of generic code review
+- **2025-01-24**: Updated submission analysis to evaluate against specific rubric criteria with scoring
+- **2025-01-24**: Fixed course sync caching issues and prevented data mixing in candidate table
+- **2025-01-24**: Improved Canvas API integration to fetch rubric data with assignments
+- **2025-01-24**: Resolved storage persistence errors and optimized query refresh intervals
 
 ## Technical Notes
 - Uses Canvas REST API v1 for reliable data access
