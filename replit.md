@@ -75,6 +75,8 @@ Required environment variables:
 - **2025-01-24**: Added Canvas Users API integration to fetch enrolled students as candidates
 - **2025-01-24**: Fixed React Query URL construction and candidate filtering logic
 - **2025-01-24**: Successfully syncing students from "Jornada Link 2025.2" course as candidates
+- **2025-01-24**: Implemented Canvas API pagination to fetch all students beyond 100-student limit
+- **2025-01-24**: Enhanced student sync with proper page iteration and Link header checking
 
 ## Technical Notes
 - Uses Canvas REST API v1 for reliable data access

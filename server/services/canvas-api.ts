@@ -179,24 +179,47 @@ export class CanvasAPIService {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
     
-    const response = await fetch(
-      `${this.config.baseUrl}/api/v1/courses/${courseId}/users?enrollment_type[]=student&include[]=enrollments&include[]=email&per_page=100`, 
-      {
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+    const allUsers: any[] = [];
+    let page = 1;
+    let hasMorePages = true;
+    
+    while (hasMorePages) {
+      const response = await fetch(
+        `${this.config.baseUrl}/api/v1/courses/${courseId}/users?enrollment_type[]=student&include[]=enrollments&include[]=email&per_page=100&page=${page}`, 
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Canvas REST API Error: ${response.status} ${response.statusText}`, errorText);
-      throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
+      const users = await response.json();
+      allUsers.push(...users);
+      
+      // Check if there are more pages using Link header
+      const linkHeader = response.headers.get('Link');
+      hasMorePages = linkHeader ? linkHeader.includes('rel="next"') : false;
+      
+      console.log(`Fetched page ${page} with ${users.length} students. Total so far: ${allUsers.length}`);
+      page++;
+      
+      // Safety limit to prevent infinite loops
+      if (page > 50) {
+        console.warn(`Reached maximum page limit (50) when fetching students for course ${courseId}`);
+        break;
+      }
     }
+    
+    console.log(`Total students fetched for course ${courseId}: ${allUsers.length}`);
 
-    const users = await response.json();
-    return users.map((user: any) => ({
+    return allUsers.map((user: any) => ({
       id: user.id.toString(),
       name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
       email: user.email || user.login_id || '',
