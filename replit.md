@@ -1,7 +1,7 @@
 # Canvas Candidate Analysis Application
 
 ## Overview
-This is an AI-powered recruitment intelligence platform that integrates with Canvas LMS to analyze student submissions and generate comprehensive candidate reports for technical interviews. The application uses Canvas GraphQL API to fetch course data, assignments, and submissions, then employs Claude AI to analyze the quality of student work and provide hiring insights.
+This is an AI-powered recruitment intelligence platform that integrates with Canvas LMS to analyze student submissions and generate comprehensive candidate reports for technical interviews. The application uses Canvas REST API to fetch course data, assignments, and submissions, then employs Claude AI to analyze the quality of student work and provide hiring insights.
 
 ## Project Architecture
 
@@ -9,7 +9,7 @@ This is an AI-powered recruitment intelligence platform that integrates with Can
 - **Frontend**: React with TypeScript, Tailwind CSS, shadcn/ui components
 - **Backend**: Express.js with TypeScript
 - **AI Analysis**: Anthropic Claude for submission evaluation
-- **Canvas Integration**: GraphQL API for data synchronization
+- **Canvas Integration**: API for data synchronization
 - **Storage**: In-memory storage with typed interfaces
 - **Routing**: Wouter for client-side navigation
 
@@ -40,7 +40,7 @@ This is an AI-powered recruitment intelligence platform that integrates with Can
 - `GET /api/jobs/:id` - Check processing job status
 
 ### Canvas Integration
-Uses Canvas GraphQL API to fetch:
+Uses Canvas API to fetch:
 - Course information with enrollment data
 - Assignment details including rubrics
 - Student submissions with attachments
