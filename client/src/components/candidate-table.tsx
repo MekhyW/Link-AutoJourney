@@ -167,28 +167,6 @@ export default function CandidateTable({ candidates, isLoading }: CandidateTable
           })}
         </tbody>
       </table>
-
-      {/* Pagination would go here */}
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Showing <span className="font-medium">1</span> to{" "}
-            <span className="font-medium">{Math.min(10, candidates.length)}</span> of{" "}
-            <span className="font-medium">{candidates.length}</span> candidates
-          </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" size="sm" disabled>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" className="bg-primary text-white">
-              1
-            </Button>
-            <Button variant="outline" size="sm" disabled={candidates.length <= 10}>
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

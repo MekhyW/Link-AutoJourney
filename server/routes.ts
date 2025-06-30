@@ -226,7 +226,7 @@ async function processCourseSync(jobId: number) {
         let assignment = await storage.getAssignmentByCanvasId(canvasAssignment._id);
         
         if (!assignment) {
-          await storage.createAssignment({
+          assignment = await storage.createAssignment({
             canvasId: canvasAssignment._id,
             courseId: course.id,
             name: canvasAssignment.name,
@@ -237,6 +237,58 @@ async function processCourseSync(jobId: number) {
             hasRubric: !!canvasAssignment.rubric,
             rubricData: canvasAssignment.rubric || null
           });
+        }
+
+        // Fetch submissions for this assignment
+        try {
+          const submissions = await canvasAPI.getAssignmentSubmissions(canvasCourse._id, canvasAssignment._id);
+          console.log(`Found ${submissions.length} submissions for assignment ${canvasAssignment.name}`);
+
+          for (const canvasSubmission of submissions) {
+            // Skip submissions without actual content - be more lenient to capture more submissions
+            if (!canvasSubmission.submittedAt) {
+              console.log(`Skipping submission ${canvasSubmission._id} - no submission date`);
+              continue;
+            }
+            
+            // Log submission details for debugging
+            console.log(`Processing submission ${canvasSubmission._id} by ${canvasSubmission.user.name}:`, {
+              hasBody: !!canvasSubmission.body,
+              bodyLength: canvasSubmission.body?.length || 0,
+              attachmentCount: canvasSubmission.attachments?.length || 0,
+              submissionType: canvasSubmission.submissionType
+            });
+
+            // Find the candidate for this submission
+            const candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user.id);
+            if (!candidate) {
+              console.warn(`No candidate found for submission user ${canvasSubmission.user.name} (${canvasSubmission.user.id})`);
+              continue;
+            }
+
+            let submission = await storage.getSubmissionByCanvasId(canvasSubmission._id);
+            
+            if (!submission) {
+              await storage.createSubmission({
+                canvasId: canvasSubmission._id,
+                assignmentId: assignment.id,
+                candidateId: candidate.id,
+                submittedAt: new Date(canvasSubmission.submittedAt),
+                score: canvasSubmission.score,
+                grade: canvasSubmission.grade,
+                submissionType: canvasSubmission.submissionType,
+                content: canvasSubmission.body || '',
+                attachments: canvasSubmission.attachments?.map((att: any) => ({
+                  name: att.displayName || att.display_name || '',
+                  url: att.url || '',
+                  type: att.contentType || att.content_type || ''
+                })) || []
+              });
+              console.log(`Created submission for ${candidate.name} on ${canvasAssignment.name}`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching submissions for assignment ${canvasAssignment.name}:`, error);
         }
       }
 
