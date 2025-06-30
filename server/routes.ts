@@ -274,43 +274,119 @@ async function processCourseSync(jobId: number) {
           const submissions = await canvasAPI.getAssignmentSubmissions(canvasCourse._id, canvasAssignment._id);
           console.log(`Found ${submissions.length} submissions for assignment ${canvasAssignment.name}`);
           
+          // Canvas ID analysis with ADRIELE focus
+          if (submissions.length > 0) {
+            const submissionUserIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id)).sort((a, b) => a - b);
+            console.log(`${submissions.length} submissions - Canvas ID range: ${submissionUserIds[0]} to ${submissionUserIds[submissionUserIds.length - 1]}`);
+            
+            // Search for ADRIELE specifically
+            const adrieleSubmission = submissions.find(s => s.user.name.includes("ADRIELE"));
+            if (adrieleSubmission) {
+              console.log(`✓ FOUND ADRIELE in submissions! Canvas ID: ${adrieleSubmission.user.id}, Name: ${adrieleSubmission.user.name}`);
+            } else {
+              console.log(`✗ ADRIELE NOT FOUND in ${submissions.length} submissions for ${canvasAssignment.name}`);
+              // Check what Canvas IDs we do have
+              const userIds = submissions.map(s => s.user.id).sort();
+              console.log(`Available submission Canvas IDs: ${userIds.slice(0, 5).join(', ')}...${userIds.slice(-2).join(', ')} (${userIds.length} total)`);
+            }
+          }
+          
+          const allCandidates = await storage.getCandidates(course.id);
+          
+          // Debug Canvas ID ranges and ADRIELE specifically
+          if (submissions.length > 0) {
+            const adrieleSubmission = submissions.find(s => s.user.name.includes("ADRIELE"));
+            if (adrieleSubmission) {
+              const adrieleCandidate = allCandidates.find(c => c.name.includes("ADRIELE"));
+              console.log(`✓ FOUND ADRIELE in submissions: Canvas ID ${adrieleSubmission.user.id}, Email: ${adrieleSubmission.user.email || 'none'}`);
+              if (adrieleCandidate) {
+                console.log(`ADRIELE candidate: Canvas ID ${adrieleCandidate.canvasUserId}, Email: ${adrieleCandidate.email}`);
+                console.log(`CANVAS ID MISMATCH: Candidate ${adrieleCandidate.canvasUserId} != Submission ${adrieleSubmission.user.id} - This explains why no matching occurs`);
+              }
+            } else {
+              console.log(`✗ ADRIELE NOT in ${submissions.length} submissions for ${canvasAssignment.name}`);
+              const submissionIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id)).sort((a, b) => a - b);
+              console.log(`Submission Canvas ID range: ${submissionIds[0]} to ${submissionIds[submissionIds.length - 1]} (total: ${submissionIds.length})`);
+              
+              // Check if 3134 is anywhere close
+              const adrieleId = 3134;
+              const closestLower = submissionIds.filter(id => id < adrieleId).slice(-1)[0] || 'none';
+              const closestHigher = submissionIds.filter(id => id > adrieleId)[0] || 'none';
+              console.log(`ADRIELE's Canvas ID 3134 is between ${closestLower} and ${closestHigher} in submission range`);
+            }
+          }
+          const candidateUserIds = allCandidates.map(c => parseInt(c.canvasUserId)).filter(id => !isNaN(id)).sort((a, b) => a - b);
+          console.log(`${allCandidates.length} candidates - Canvas ID range: ${candidateUserIds[0]} to ${candidateUserIds[candidateUserIds.length - 1]}`);
+          
+          // Calculate overlap
+          const submissionIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id));
+          const candidateIds = allCandidates.map(c => parseInt(c.canvasUserId)).filter(id => !isNaN(id));
+          const overlap = submissionIds.filter(id => candidateIds.includes(id));
+          console.log(`Canvas ID overlap: ${overlap.length}/${submissions.length} submissions match ${allCandidates.length} candidates`);
+          
           // Track matching statistics
           let matchedSubmissions = 0;
           let unmatchedSubmissions = 0;
 
           for (const canvasSubmission of submissions) {
-            // Skip submissions without actual content - be more lenient to capture more submissions
-            if (!canvasSubmission.submittedAt) {
-              console.log(`Skipping submission ${canvasSubmission._id} - no submission date`);
+            // Be more lenient - capture any submission with a user ID
+            if (!canvasSubmission.user?.id) {
+              console.log(`Skipping submission ${canvasSubmission._id} - no user ID`);
               continue;
             }
             
             // Log submission details for debugging
-            console.log(`Processing submission ${canvasSubmission._id} by ${canvasSubmission.user.name}:`, {
+            console.log(`Processing submission ${canvasSubmission._id} by ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id}):`, {
               hasBody: !!canvasSubmission.body,
               bodyLength: canvasSubmission.body?.length || 0,
               attachmentCount: canvasSubmission.attachments?.length || 0,
-              submissionType: canvasSubmission.submissionType
+              submissionType: canvasSubmission.submissionType,
+              email: canvasSubmission.user.email
             });
 
-            // Find the candidate for this submission
-            const candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user.id);
+            // Comprehensive candidate matching strategy due to Canvas API user ID inconsistencies
+            let candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user.id);
+            let matchMethod = "canvas_id";
+            
             if (!candidate) {
-              console.warn(`No candidate found for submission user ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id})`);
-              
-              // Debug: Check if there's a candidate with similar user data
+              // Try email matching first (most reliable)
               const allCandidates = await storage.getCandidates(course.id);
-              const matchByEmail = allCandidates.find(c => c.email === canvasSubmission.user.email);
-              const matchByName = allCandidates.find(c => c.name === canvasSubmission.user.name);
-              
-              if (matchByEmail) {
-                console.log(`Found candidate by email: ${matchByEmail.name} (ID: ${matchByEmail.id}, Canvas ID: ${matchByEmail.canvasUserId})`);
-              }
-              if (matchByName) {
-                console.log(`Found candidate by name: ${matchByName.name} (ID: ${matchByName.id}, Canvas ID: ${matchByName.canvasUserId})`);
+              if (canvasSubmission.user.email) {
+                candidate = allCandidates.find(c => c.email === canvasSubmission.user.email);
+                if (candidate) matchMethod = "email";
               }
               
-              continue;
+              // Try exact name matching
+              if (!candidate && canvasSubmission.user.name) {
+                candidate = allCandidates.find(c => c.name === canvasSubmission.user.name);
+                if (candidate) matchMethod = "name";
+              }
+              
+              // Try partial name matching for variations
+              if (!candidate && canvasSubmission.user.name) {
+                const submissionName = canvasSubmission.user.name.toLowerCase().trim();
+                candidate = allCandidates.find(c => {
+                  const candidateName = c.name.toLowerCase().trim();
+                  // Check if names match when normalized
+                  return candidateName === submissionName ||
+                         candidateName.includes(submissionName) ||
+                         submissionName.includes(candidateName);
+                });
+                if (candidate) matchMethod = "partial_name";
+              }
+              
+              if (!candidate) {
+                console.warn(`No candidate match for submission: ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id}, Email: ${canvasSubmission.user.email || 'none'})`);
+                unmatchedSubmissions++;
+                continue;
+              } else {
+                console.log(`Matched submission via ${matchMethod}: ${candidate.name} -> ${canvasSubmission.user.name}`);
+              }
+            }
+            
+            // Special debug for ADRIELE DOS SANTOS PIMENTEL
+            if (canvasSubmission.user.name.includes("ADRIELE") || candidate.name.includes("ADRIELE")) {
+              console.log(`ADRIELE SUBMISSION DEBUG - Assignment: ${canvasAssignment.name}, Submission ID: ${canvasSubmission._id}, Score: ${canvasSubmission.score}, Grade: ${canvasSubmission.grade}, Has content: ${!!canvasSubmission.body}, Attachments: ${canvasSubmission.attachments?.length || 0}`);
             }
 
             let submission = await storage.getSubmissionByCanvasId(canvasSubmission._id);

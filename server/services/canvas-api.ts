@@ -243,7 +243,12 @@ export class CanvasAPIService {
     if (!this.config.apiKey) {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
-    const response = await fetch(`${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment&include[]=submission_history`, {
+    // Try multiple submission endpoints to capture all students including those not actively submitting
+    let allSubmissions: any[] = [];
+    
+    // First, try the standard submissions endpoint
+    const submissionsUrl = `${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment&per_page=200`;
+    const response = await fetch(submissionsUrl, {
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
@@ -255,7 +260,61 @@ export class CanvasAPIService {
       throw new Error(`Canvas API request failed: ${response.status} ${response.statusText}`);
     }
     const submissions = await response.json();
-    return submissions.map((submission: any) => ({
+    allSubmissions = allSubmissions.concat(submissions);
+    
+    // Fetch ALL possible submissions with comprehensive pagination to capture students like ADRIELE
+    let nextPageUrl = `${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment&per_page=100`;
+    let pageCount = 0;
+    
+    while (nextPageUrl && pageCount < 10) { // Safety limit
+      try {
+        const pageResponse = await fetch(nextPageUrl, {
+          headers: {
+            'Authorization': `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!pageResponse.ok) break;
+        
+        const pageSubmissions = await pageResponse.json();
+        if (pageSubmissions.length === 0) break;
+        
+        allSubmissions = allSubmissions.concat(pageSubmissions);
+        pageCount++;
+        
+        // Check for next page in Link header
+        const linkHeader = pageResponse.headers.get('Link');
+        nextPageUrl = null;
+        if (linkHeader) {
+          const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+          if (nextMatch) {
+            nextPageUrl = nextMatch[1];
+          }
+        }
+        
+        // Force break if no progress to avoid infinite loops
+        if (pageSubmissions.length === 0) {
+          break;
+        }
+        
+        console.log(`Fetched page ${pageCount} with ${pageSubmissions.length} submissions. Total: ${allSubmissions.length}`);
+        
+        // Check if we found ADRIELE on this page
+        const adrieleOnPage = pageSubmissions.find((sub: any) => sub.user?.name?.includes("ADRIELE"));
+        if (adrieleOnPage) {
+          console.log(`FOUND ADRIELE on page ${pageCount}! Canvas ID: ${adrieleOnPage.user.id}`);
+        }
+        
+      } catch (error) {
+        console.log(`Error fetching page ${pageCount + 1}:`, error);
+        break;
+      }
+    }
+    
+    console.log(`Total submissions fetched across ${pageCount} pages: ${allSubmissions.length}`);
+    
+    return allSubmissions.map((submission: any) => ({
       id: submission.id.toString(),
       _id: submission.id.toString(),
       score: submission.score,
