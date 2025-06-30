@@ -106,10 +106,6 @@ export default function CandidateDetail() {
               <Download className="w-4 h-4 mr-2" />
               Export Report
             </Button>
-            <Button>
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule Interview
-            </Button>
           </div>
         </div>
       </div>
@@ -132,7 +128,7 @@ export default function CandidateDetail() {
                             {submission.assignment?.name || 'Unknown Assignment'}
                           </h5>
                           <Badge variant={submission.score >= 80 ? "default" : "secondary"}>
-                            {submission.score ? `${submission.score}/100` : 'No Score'}
+                            {submission.score ? `${submission.score}` : 'No Score'}
                           </Badge>
                         </div>
                         
