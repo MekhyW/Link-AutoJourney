@@ -243,7 +243,7 @@ export class CanvasAPIService {
     if (!this.config.apiKey) {
       throw new Error('Canvas API key not configured. Please add your CANVAS_API_KEY to secrets.');
     }
-    const response = await fetch(`${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment`, {
+    const response = await fetch(`${this.config.baseUrl}/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions?include[]=user&include[]=attachments&include[]=rubric_assessment&include[]=submission_history`, {
       headers: {
         'Authorization': `Bearer ${this.config.apiKey}`,
         'Content-Type': 'application/json',
@@ -287,7 +287,13 @@ export class CanvasAPIService {
         }] : []
       }
     })).filter((submission: any) => 
-      submission.submittedAt && submission.user?.id && (submission.body || submission.attachments.length > 0)
+      submission.user?.id && (
+        submission.submittedAt || 
+        submission.body || 
+        submission.attachments.length > 0 ||
+        submission.score !== null ||
+        submission.grade !== null
+      )
     );
   }
 

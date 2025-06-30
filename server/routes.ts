@@ -273,6 +273,10 @@ async function processCourseSync(jobId: number) {
         try {
           const submissions = await canvasAPI.getAssignmentSubmissions(canvasCourse._id, canvasAssignment._id);
           console.log(`Found ${submissions.length} submissions for assignment ${canvasAssignment.name}`);
+          
+          // Track matching statistics
+          let matchedSubmissions = 0;
+          let unmatchedSubmissions = 0;
 
           for (const canvasSubmission of submissions) {
             // Skip submissions without actual content - be more lenient to capture more submissions
@@ -292,7 +296,20 @@ async function processCourseSync(jobId: number) {
             // Find the candidate for this submission
             const candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user.id);
             if (!candidate) {
-              console.warn(`No candidate found for submission user ${canvasSubmission.user.name} (${canvasSubmission.user.id})`);
+              console.warn(`No candidate found for submission user ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id})`);
+              
+              // Debug: Check if there's a candidate with similar user data
+              const allCandidates = await storage.getCandidates(course.id);
+              const matchByEmail = allCandidates.find(c => c.email === canvasSubmission.user.email);
+              const matchByName = allCandidates.find(c => c.name === canvasSubmission.user.name);
+              
+              if (matchByEmail) {
+                console.log(`Found candidate by email: ${matchByEmail.name} (ID: ${matchByEmail.id}, Canvas ID: ${matchByEmail.canvasUserId})`);
+              }
+              if (matchByName) {
+                console.log(`Found candidate by name: ${matchByName.name} (ID: ${matchByName.id}, Canvas ID: ${matchByName.canvasUserId})`);
+              }
+              
               continue;
             }
 
@@ -315,7 +332,16 @@ async function processCourseSync(jobId: number) {
                 })) || []
               });
               console.log(`Created submission for ${candidate.name} on ${canvasAssignment.name}`);
+              matchedSubmissions++;
+            } else {
+              unmatchedSubmissions++;
             }
+          }
+          
+          console.log(`Assignment ${canvasAssignment.name}: ${matchedSubmissions} matched, ${unmatchedSubmissions} unmatched submissions`);
+          
+          if (submissions.length === 0) {
+            console.log(`No submissions found for assignment: ${canvasAssignment.name}`);
           }
         } catch (error) {
           console.error(`Error fetching submissions for assignment ${canvasAssignment.name}:`, error);
