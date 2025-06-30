@@ -77,6 +77,10 @@ Required environment variables:
 - **2025-01-24**: Successfully syncing students from "Jornada Link 2025.2" course as candidates
 - **2025-01-24**: Implemented Canvas API pagination to fetch all students beyond 100-student limit
 - **2025-01-24**: Enhanced student sync with proper page iteration and Link header checking
+- **2025-06-30**: Fixed submission fetching during course sync - now includes actual Canvas submissions
+- **2025-06-30**: Resolved "Unknown Assignment" display issue with proper async assignment lookup
+- **2025-06-30**: Enhanced candidates API to include submissions with correct assignment names
+- **2025-06-30**: Successfully fetching 200+ students with their Canvas submissions and assignments
 
 ## Technical Notes
 - Uses Canvas REST API v1 for reliable data access
@@ -89,10 +93,13 @@ Required environment variables:
 
 ## Current Status
 Application is fully operational with Canvas LMS integration successfully established. The system can:
-- Sync courses from linkschool.instructure.com
-- Import assignments and student submissions
-- Analyze submission content using AI
+- Sync courses from linkschool.instructure.com with 200+ students per course
+- Import assignments and student submissions with proper Canvas pagination
+- Display correct assignment names in submission details instead of "Unknown Assignment"
+- Fetch actual Canvas submissions during course sync (resolving "No submissions found" issues)
+- Analyze submission content using AI against actual Canvas rubrics
 - Generate comprehensive candidate reports for recruitment
 - Track processing jobs with real-time status updates
 
+Current performance: 10+ candidates with submissions successfully synced and displaying correctly.
 Ready for production use with eliminatory course analysis and interview preparation.

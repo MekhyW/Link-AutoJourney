@@ -60,7 +60,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const courseId = parseInt(req.params.courseId);
       const candidates = await storage.getCandidates(courseId);
-      res.json(candidates);
+      
+      // Include submissions for each candidate
+      const candidatesWithSubmissions = await Promise.all(
+        candidates.map(async (candidate) => {
+          const submissions = await storage.getSubmissions({ candidateId: candidate.id });
+          const submissionsWithAssignments = await Promise.all(
+            submissions.map(async (sub) => {
+              const assignment = await storage.getAssignment(sub.assignmentId!);
+              return {
+                ...sub,
+                assignment: assignment || { name: 'Unknown Assignment', id: sub.assignmentId }
+              };
+            })
+          );
+          
+          return {
+            ...candidate,
+            submissions: submissionsWithAssignments
+          };
+        })
+      );
+      
+      res.json(candidatesWithSubmissions);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
     }
@@ -78,12 +100,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const submissions = await storage.getSubmissions({ candidateId });
       
+      const submissionsWithAssignments = await Promise.all(
+        submissions.map(async (sub) => {
+          const assignment = await storage.getAssignment(sub.assignmentId!);
+          console.log(`Looking up assignment ${sub.assignmentId}: found ${assignment ? assignment.name : 'null'}`);
+          return {
+            ...sub,
+            assignment: assignment || { name: 'Unknown Assignment', id: sub.assignmentId }
+          };
+        })
+      );
+
       res.json({
         ...candidate,
-        submissions: submissions.map(sub => ({
-          ...sub,
-          assignment: storage.getAssignment(sub.assignmentId!)
-        }))
+        submissions: submissionsWithAssignments
       });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
