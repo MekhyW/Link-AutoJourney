@@ -131,6 +131,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI analysis route for a single candidate
+  app.post("/api/candidates/:id/analyze", async (req, res) => {
+    try {
+      const candidateId = parseInt(req.params.id);
+      const candidate = await storage.getCandidate(candidateId);
+      
+      if (!candidate) {
+        return res.status(404).json({ error: "Candidate not found" });
+      }
+
+      // Create processing job for candidate analysis
+      const job = await storage.createProcessingJob({
+        type: "candidate_analysis",
+        status: "processing",
+        progress: 0,
+        totalItems: 0,
+        error: null
+      });
+
+      // Start processing in background
+      processCandidateAnalysis(job.id, candidateId).catch(error => {
+        console.error(`Error in candidate analysis job ${job.id}:`, error);
+        storage.updateProcessingJob(job.id, {
+          status: "failed",
+          error: error.message
+        });
+      });
+
+      res.json({
+        jobId: job.id,
+        message: "Candidate analysis started"
+      });
+    } catch (error) {
+      console.error("Error starting candidate analysis:", error);
+      res.status(500).json({ error: "Failed to start candidate analysis" });
+    }
+  });
+
   // Start assignment analysis
   app.post("/api/courses/:courseId/analyze", async (req, res) => {
     try {
@@ -617,6 +655,113 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
     await storage.updateProcessingJob(jobId, { 
       status: "failed",
       error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}
+
+
+async function processCandidateAnalysis(jobId: number, candidateId: number) {
+  try {
+    await storage.updateProcessingJob(jobId, {
+      status: "processing",
+      progress: 10
+    });
+
+    console.log(`Starting AI analysis for candidate ${candidateId}`);
+
+    const submissions = await storage.getSubmissions({ candidateId });
+    const unanalyzedSubmissions = submissions.filter(sub => !sub.isAnalyzed);
+
+    await storage.updateProcessingJob(jobId, {
+      totalItems: unanalyzedSubmissions.length,
+      progress: 20
+    });
+
+    if (unanalyzedSubmissions.length === 0) {
+      await storage.updateProcessingJob(jobId, {
+        status: "completed",
+        progress: 100
+      });
+      console.log(`No submissions to analyze for candidate ${candidateId}`);
+      return;
+    }
+
+    for (let i = 0; i < unanalyzedSubmissions.length; i++) {
+      const submission = unanalyzedSubmissions[i];
+      
+      try {
+        const assignment = await storage.getAssignment(submission.assignmentId!);
+        if (!assignment) continue;
+
+        let analysis;
+        const assignmentContext = `${assignment.name}: ${assignment.description}`;
+
+        if (submission.content) {
+          const rubricCriteria = assignment.rubricData || undefined;
+          analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
+        } else if (submission.attachments && submission.attachments.length > 0) {
+          analysis = {
+            summary: "File submission analyzed",
+            strengths: ["File submitted on time"],
+            improvements: ["Unable to analyze file content automatically"],
+            skillsIdentified: ["File management"],
+            confidence: 0.3
+          };
+        } else {
+          analysis = {
+            summary: "No content to analyze",
+            strengths: [],
+            improvements: ["No submission content found"],
+            skillsIdentified: [],
+            confidence: 0.1
+          };
+        }
+
+        await storage.updateSubmission(submission.id, {
+          aiAnalysis: analysis,
+          isAnalyzed: true
+        });
+
+        const progress = 20 + Math.round((i + 1) / unanalyzedSubmissions.length * 60);
+        await storage.updateProcessingJob(jobId, { progress });
+
+      } catch (error) {
+        console.error(`Error analyzing submission ${submission.id}:`, error);
+      }
+    }
+
+    const analyzedSubmissions = await storage.getSubmissions({ candidateId });
+    const submissionsWithAnalysis = analyzedSubmissions.filter(sub => sub.aiAnalysis);
+
+    if (submissionsWithAnalysis.length > 0) {
+      const insights = await aiAnalysis.generateCandidateInsights(
+        submissionsWithAnalysis.map(sub => ({
+          analysis: sub.aiAnalysis!,
+          assignmentName: "Assignment",
+          score: sub.score || 0
+        }))
+      );
+
+      await storage.updateCandidate(candidateId, {
+        aiInsights: insights.overallAssessment,
+        strengths: insights.topStrengths,
+        weaknesses: insights.areasForImprovement,
+        status: insights.readinessLevel
+      });
+    }
+
+    await storage.updateProcessingJob(jobId, {
+      status: "completed",
+      progress: 100
+    });
+
+    console.log(`Completed AI analysis for candidate ${candidateId}`);
+
+  } catch (error) {
+    console.error(`Error in candidate analysis job ${jobId}:`, error);
+    await storage.updateProcessingJob(jobId, {
+      status: "failed",
+      error: error.message
     });
   }
 }

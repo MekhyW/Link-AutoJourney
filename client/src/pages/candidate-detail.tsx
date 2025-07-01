@@ -1,11 +1,13 @@
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Calendar, Download, FileText, Check, AlertTriangle, Clock } from "lucide-react";
+import { ArrowLeft, Calendar, Download, FileText, Check, AlertTriangle, Clock, Brain, Loader2 } from "lucide-react";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Candidate, Submission } from "@/../../shared/schema";
 
 type CandidateWithSubmissions = Candidate & {
@@ -18,9 +20,49 @@ type CandidateWithSubmissions = Candidate & {
 
 export default function CandidateDetail() {
   const { candidateId } = useParams();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: candidate, isLoading } = useQuery<CandidateWithSubmissions>({
     queryKey: ["/api/candidates", candidateId],
+  });
+
+  // Check for processing jobs
+  const { data: jobs } = useQuery<any[]>({
+    queryKey: ["/api/jobs"],
+    refetchInterval: 2000,
+  });
+
+  const candidateAnalysisJob = jobs?.find((job: any) => 
+    job.type === "candidate_analysis" && job.status === "processing"
+  );
+
+  const analyzeCandidateMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/candidates/${candidateId}/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "AI Analysis Started",
+        description: "The candidate analysis is now running in the background.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to start candidate analysis",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -102,6 +144,18 @@ export default function CandidateDetail() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
+            <Button 
+              variant="outline"
+              onClick={() => analyzeCandidateMutation.mutate()}
+              disabled={analyzeCandidateMutation.isPending || !!candidateAnalysisJob}
+            >
+              {(analyzeCandidateMutation.isPending || candidateAnalysisJob) ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Brain className="w-4 h-4 mr-2" />
+              )}
+              {candidateAnalysisJob ? `Analyzing... ${candidateAnalysisJob.progress || 0}%` : "Run AI Analysis"}
+            </Button>
             <Button variant="outline">
               <Download className="w-4 h-4 mr-2" />
               Export Report
@@ -119,6 +173,24 @@ export default function CandidateDetail() {
                 <CardTitle>Submission Analysis</CardTitle>
               </CardHeader>
               <CardContent>
+                {candidateAnalysisJob && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span className="text-sm font-medium text-blue-900">AI Analysis in Progress</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${candidateAnalysisJob.progress || 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Analyzing {candidateAnalysisJob.totalItems || 0} submissions...
+                    </p>
+                  </div>
+                )}
+                
                 <div className="space-y-4">
                   {(candidate.submissions && candidate.submissions.length > 0) ? (
                     candidate.submissions.map((submission: any) => (

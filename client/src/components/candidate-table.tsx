@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Download, Calendar } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 
 interface CandidateTableProps {
   candidates: any[];
@@ -152,13 +152,6 @@ export default function CandidateTable({ candidates, isLoading }: CandidateTable
                     </Link>
                     <Button variant="ghost" size="sm">
                       <Download className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      disabled={candidate.status !== 'interview_ready'}
-                    >
-                      <Calendar className="w-4 h-4" />
                     </Button>
                   </div>
                 </td>
