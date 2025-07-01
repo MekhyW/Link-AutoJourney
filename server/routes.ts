@@ -316,43 +316,10 @@ async function processCourseSync(jobId: number) {
           if (submissions.length > 0) {
             const submissionUserIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id)).sort((a, b) => a - b);
             console.log(`${submissions.length} submissions - Canvas ID range: ${submissionUserIds[0]} to ${submissionUserIds[submissionUserIds.length - 1]}`);
-            
-            // Search for ADRIELE specifically
-            const adrieleSubmission = submissions.find(s => s.user.name.includes("ADRIELE"));
-            if (adrieleSubmission) {
-              console.log(`✓ FOUND ADRIELE in submissions! Canvas ID: ${adrieleSubmission.user.id}, Name: ${adrieleSubmission.user.name}`);
-            } else {
-              console.log(`✗ ADRIELE NOT FOUND in ${submissions.length} submissions for ${canvasAssignment.name}`);
-              // Check what Canvas IDs we do have
-              const userIds = submissions.map(s => s.user.id).sort();
-              console.log(`Available submission Canvas IDs: ${userIds.slice(0, 5).join(', ')}...${userIds.slice(-2).join(', ')} (${userIds.length} total)`);
-            }
           }
           
           const allCandidates = await storage.getCandidates(course.id);
           
-          // Debug Canvas ID ranges and ADRIELE specifically
-          if (submissions.length > 0) {
-            const adrieleSubmission = submissions.find(s => s.user.name.includes("ADRIELE"));
-            if (adrieleSubmission) {
-              const adrieleCandidate = allCandidates.find(c => c.name.includes("ADRIELE"));
-              console.log(`✓ FOUND ADRIELE in submissions: Canvas ID ${adrieleSubmission.user.id}, Email: ${adrieleSubmission.user.email || 'none'}`);
-              if (adrieleCandidate) {
-                console.log(`ADRIELE candidate: Canvas ID ${adrieleCandidate.canvasUserId}, Email: ${adrieleCandidate.email}`);
-                console.log(`CANVAS ID MISMATCH: Candidate ${adrieleCandidate.canvasUserId} != Submission ${adrieleSubmission.user.id} - This explains why no matching occurs`);
-              }
-            } else {
-              console.log(`✗ ADRIELE NOT in ${submissions.length} submissions for ${canvasAssignment.name}`);
-              const submissionIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id)).sort((a, b) => a - b);
-              console.log(`Submission Canvas ID range: ${submissionIds[0]} to ${submissionIds[submissionIds.length - 1]} (total: ${submissionIds.length})`);
-              
-              // Check if 3134 is anywhere close
-              const adrieleId = 3134;
-              const closestLower = submissionIds.filter(id => id < adrieleId).slice(-1)[0] || 'none';
-              const closestHigher = submissionIds.filter(id => id > adrieleId)[0] || 'none';
-              console.log(`ADRIELE's Canvas ID 3134 is between ${closestLower} and ${closestHigher} in submission range`);
-            }
-          }
           const candidateUserIds = allCandidates.map(c => parseInt(c.canvasUserId)).filter(id => !isNaN(id)).sort((a, b) => a - b);
           console.log(`${allCandidates.length} candidates - Canvas ID range: ${candidateUserIds[0]} to ${candidateUserIds[candidateUserIds.length - 1]}`);
           
@@ -421,14 +388,8 @@ async function processCourseSync(jobId: number) {
                 console.log(`Matched submission via ${matchMethod}: ${candidate.name} -> ${canvasSubmission.user.name}`);
               }
             }
-            
-            // Special debug for ADRIELE DOS SANTOS PIMENTEL
-            if (canvasSubmission.user.name.includes("ADRIELE") || candidate.name.includes("ADRIELE")) {
-              console.log(`ADRIELE SUBMISSION DEBUG - Assignment: ${canvasAssignment.name}, Submission ID: ${canvasSubmission._id}, Score: ${canvasSubmission.score}, Grade: ${canvasSubmission.grade}, Has content: ${!!canvasSubmission.body}, Attachments: ${canvasSubmission.attachments?.length || 0}`);
-            }
 
             let submission = await storage.getSubmissionByCanvasId(canvasSubmission._id);
-            
             if (!submission) {
               await storage.createSubmission({
                 canvasId: canvasSubmission._id,
