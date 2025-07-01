@@ -1,5 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+// Type for pdf-parse
+interface PDFData {
+  text: string;
+  numpages: number;
+  numrender: number;
+  info: any;
+  metadata: any;
+}
+
 /*
 <important_code_snippet_instructions>
 The newest Anthropic model is "claude-sonnet-4-20250514", not "claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022" nor "claude-3-sonnet-20240229". 
@@ -146,12 +155,23 @@ export class AIAnalysisService {
   async analyzeImageSubmission(
     base64Image: string, 
     assignmentContext: string, 
-    rubricCriteria?: RubricCriteria[]
+    rubricCriteria?: RubricCriteria[],
+    mimeType: string = "image/jpeg"
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
     const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
-    const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'imagem enviada');
-    const textContent = `${basePrompt}${analysisInstructions}`;
+    
+    // Determine if this is a video file based on mime type
+    const isVideo = mimeType.startsWith('video/');
+    const mediaTypeForAnalysis = isVideo ? 'vídeo enviado' : 'imagem enviada';
+    
+    const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, mediaTypeForAnalysis);
+    const textContent = `${basePrompt}
+    
+    ${isVideo ? 'Este é um arquivo de vídeo submetido pelo candidato. Analise o conteúdo visual disponível.' : 'Esta é uma imagem submetida pelo candidato.'}
+    
+    ${analysisInstructions}`;
+    
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL_STR,
       max_tokens: 2048,
@@ -248,9 +268,14 @@ export class AIAnalysisService {
   }
 
   async extractTextFromPDF(buffer: Buffer): Promise<string> {
-    // For PDF extraction, we would typically use a library like pdf-parse
-    // For now, return a placeholder indicating PDF processing is needed
-    return "PDF content extraction would require additional dependencies like pdf-parse";
+    try {
+      const pdfParse = await import('pdf-parse');
+      const data: PDFData = await pdfParse.default(buffer);
+      return data.text;
+    } catch (error) {
+      console.error('Error extracting text from PDF:', error);
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 }
 

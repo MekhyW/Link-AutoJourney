@@ -661,13 +661,69 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
           const rubricCriteria = assignment.rubricData || undefined;
           analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
         } else if (submission.attachments && submission.attachments.length > 0) {
-          analysis = {
-            summary: "File submission analyzed",
-            strengths: ["File submitted on time"],
-            improvements: ["Unable to analyze file content automatically"],
-            skillsIdentified: ["File management"],
-            confidence: 0.3
-          };
+          // Handle file attachments
+          try {
+            console.log(`Processing ${submission.attachments.length} attachments for submission ${submission.id}`);
+            const attachment = submission.attachments[0]; // Process first attachment
+            
+            if (attachment.url) {
+              console.log(`Downloading attachment: ${attachment.name} (${attachment.type})`);
+              const fileBuffer = await canvasAPI.downloadAttachment(attachment.url);
+              
+              const rubricCriteria = Array.isArray(assignment.rubricData) ? assignment.rubricData : undefined;
+              
+              // Determine file type and analyze accordingly
+              if (attachment.type?.includes('pdf')) {
+                console.log('Analyzing PDF document');
+                analysis = await aiAnalysis.analyzeDocumentSubmission(fileBuffer.toString(), assignmentContext, rubricCriteria);
+                
+                // Try PDF text extraction for better analysis
+                try {
+                  const pdfText = await aiAnalysis.extractTextFromPDF(fileBuffer);
+                  if (pdfText && pdfText.trim().length > 0) {
+                    analysis = await aiAnalysis.analyzeTextSubmission(pdfText, assignmentContext, rubricCriteria);
+                  }
+                } catch (pdfError) {
+                  console.log('PDF text extraction failed, using document analysis');
+                }
+              } else if (attachment.type?.startsWith('image/') || attachment.type?.startsWith('video/')) {
+                console.log(`Analyzing visual content: ${attachment.type}`);
+                const base64Content = fileBuffer.toString('base64');
+                analysis = await aiAnalysis.analyzeImageSubmission(base64Content, assignmentContext, rubricCriteria, attachment.type);
+              } else {
+                // For other file types, try to analyze as text if possible
+                const fileContent = fileBuffer.toString('utf8');
+                if (fileContent && fileContent.trim().length > 0) {
+                  analysis = await aiAnalysis.analyzeTextSubmission(fileContent, assignmentContext, rubricCriteria);
+                } else {
+                  analysis = {
+                    summary: `File submitted: ${attachment.name}`,
+                    strengths: ["File submitted on time"],
+                    improvements: [`Unable to analyze ${attachment.type} file type automatically`],
+                    skillsIdentified: ["File management"],
+                    confidence: 0.3
+                  };
+                }
+              }
+            } else {
+              analysis = {
+                summary: "File attachment without URL",
+                strengths: ["File submitted"],
+                improvements: ["Attachment URL not available for analysis"],
+                skillsIdentified: ["File submission"],
+                confidence: 0.2
+              };
+            }
+          } catch (attachmentError) {
+            console.error(`Error processing attachment:`, attachmentError);
+            analysis = {
+              summary: "File analysis failed",
+              strengths: ["File submitted"],
+              improvements: [`File analysis failed: ${attachmentError instanceof Error ? attachmentError.message : 'Unknown error'}`],
+              skillsIdentified: ["File submission"],
+              confidence: 0.2
+            };
+          }
         } else {
           analysis = {
             summary: "No content to analyze",
