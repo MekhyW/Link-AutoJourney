@@ -61,71 +61,86 @@ export class AIAnalysisService {
     }
   }
 
+  private buildRubricSection(rubricCriteria?: RubricCriteria[]): string {
+    if (!rubricCriteria) return '';
+    return `
+    CRITÉRIOS DE RUBRICA:
+    ${rubricCriteria.map(criteria => `
+    ${criteria.description} (${criteria.points} pontos máximos):
+    ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
+    `).join('\n')}
+    `;
+  }
+
+  private buildAnalysisInstructions(rubricCriteria?: RubricCriteria[], submissionType: string = 'submissão'): string {
+    if (rubricCriteria) {
+      return `
+      Analise esta ${submissionType} em relação aos critérios de rubrica fornecidos. Para cada critério, determine qual nível de classificação melhor se adequa à ${submissionType} e forneça um feedback específico.
+      
+      Responda com um objeto JSON contendo:
+      - summary: Uma breve avaliação geral
+      - strengths: Conjunto de pontos fortes específicos identificados
+      - improvements: Conjunto de áreas que precisam de melhorias  
+      - skillsIdentified: Conjunto de habilidades demonstradas
+      - confidence: Pontuação de confiança da sua análise (0-1)
+      - rubricAssessments: Array de objetos com {criteriaId, points, ratingDescription, comments}
+      - overallRubricScore: Nota total recebida
+      - maxPossibleScore: Nota máxima possível
+      `;
+    }
+    return `
+    Forneça uma análise geral com foco na qualidade do conteúdo, na compreensão demonstrada e nas áreas de melhoria.
+    
+    Responda com um objeto JSON contendo:
+    - summary: Uma breve avaliação geral
+    - strengths: Conjunto de pontos fortes específicos identificados
+    - improvements: Conjunto de áreas que precisam de melhorias
+    - skillsIdentified: Conjunto de habilidades demonstradas  
+    - confidence: Pontuação de confiança da sua análise (0-1)
+    `;
+  }
+
+  private buildBasePrompt(assignmentContext: string, rubricCriteria?: RubricCriteria[]): string {
+    const rubricSection = this.buildRubricSection(rubricCriteria);
+    return `
+    Você é um avaliador especialista analisando a submissão de um candidato ao vestibular da faculdade.
+    
+    Contexto da Tarefa: ${assignmentContext}
+    ${rubricSection}
+    `;
+  }
+
+  private parseAIResponse(response: Anthropic.Messages.Message): SubmissionAnalysis {
+    try {
+      const responseContent = response.content[0];
+      if (responseContent.type === 'text') {
+        return JSON.parse(responseContent.text);
+      }
+      throw new Error('Unexpected response format from AI');
+    } catch (error) {
+      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
+    }
+  }
+
   async analyzeTextSubmission(
     content: string, 
     assignmentContext: string, 
     rubricCriteria?: RubricCriteria[]
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
-
-    const rubricSection = rubricCriteria ? `
-    RUBRIC CRITERIA:
-    ${rubricCriteria.map(criteria => `
-    ${criteria.description} (${criteria.points} points max):
-    ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
-    `).join('\n')}
+    const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
+    const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'submissão');
+    const prompt = `${basePrompt}
     
-    Please evaluate this submission against each rubric criteria and provide specific scores and feedback.
-    ` : '';
-
-    const prompt = `
-    You are an expert evaluator analyzing a student's submission. 
-    
-    Assignment Context: ${assignmentContext}
-    ${rubricSection}
-    
-    Student Submission:
+    Submissão do Candidato:
     ${content}
-    
-    ${rubricCriteria ? `
-    Analyze this submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission and provide specific feedback.
-    
-    Respond with a JSON object containing:
-    - summary: A brief overall assessment
-    - strengths: Array of specific strengths identified
-    - improvements: Array of areas that need improvement  
-    - skillsIdentified: Array of skills demonstrated
-    - confidence: Confidence score of your analysis (0-1)
-    - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
-    - overallRubricScore: Total points earned
-    - maxPossibleScore: Maximum possible points
-    ` : `
-    Provide a general analysis focusing on content quality, understanding demonstrated, and areas for improvement.
-    
-    Respond with a JSON object containing:
-    - summary: A brief overall assessment
-    - strengths: Array of specific strengths identified
-    - improvements: Array of areas that need improvement
-    - skillsIdentified: Array of skills demonstrated  
-    - confidence: Confidence score of your analysis (0-1)
-    `}
-    `;
-
+    ${analysisInstructions}`;
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
       model: DEFAULT_MODEL_STR,
     });
-
-    try {
-      const response = message.content[0];
-      if (response.type === 'text') {
-        return JSON.parse(response.text);
-      }
-      throw new Error('Unexpected response format from AI');
-    } catch (error) {
-      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
-    }
+    return this.parseAIResponse(message);
   }
 
   async analyzeImageSubmission(
@@ -134,7 +149,9 @@ export class AIAnalysisService {
     rubricCriteria?: RubricCriteria[]
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
-
+    const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
+    const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'imagem enviada');
+    const textContent = `${basePrompt}${analysisInstructions}`;
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL_STR,
       max_tokens: 2048,
@@ -143,41 +160,7 @@ export class AIAnalysisService {
         content: [
           {
             type: "text",
-            text: `
-            You are analyzing a visual submission for an assignment.
-            
-            Assignment Context: ${assignmentContext}
-            ${rubricCriteria ? `
-            RUBRIC CRITERIA:
-            ${rubricCriteria.map(criteria => `
-            ${criteria.description} (${criteria.points} points max):
-            ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
-            `).join('\n')}
-            ` : ''}
-            
-            ${rubricCriteria ? `
-            Analyze this image submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission.
-            
-            Respond with a JSON object containing:
-            - summary: A brief overall assessment
-            - strengths: Array of specific strengths identified
-            - improvements: Array of areas that need improvement
-            - skillsIdentified: Array of skills demonstrated
-            - confidence: Confidence score of your analysis (0-1)
-            - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
-            - overallRubricScore: Total points earned
-            - maxPossibleScore: Maximum possible points
-            ` : `
-            Please analyze this image submission and provide detailed feedback.
-            
-            Respond with a JSON object containing:
-            - summary: A brief overall assessment
-            - strengths: Array of specific strengths identified
-            - improvements: Array of areas that need improvement
-            - skillsIdentified: Array of skills demonstrated
-            - confidence: Confidence score of your analysis (0-1)
-            `}
-            `
+            text: textContent
           },
           {
             type: "image",
@@ -190,16 +173,7 @@ export class AIAnalysisService {
         ]
       }]
     });
-
-    try {
-      const responseText = response.content[0];
-      if (responseText.type === 'text') {
-        return JSON.parse(responseText.text);
-      }
-      throw new Error('Unexpected response format from AI');
-    } catch (error) {
-      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
-    }
+    return this.parseAIResponse(response);
   }
 
   async analyzeDocumentSubmission(
@@ -208,63 +182,18 @@ export class AIAnalysisService {
     rubricCriteria?: RubricCriteria[]
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
-
-    const rubricSection = rubricCriteria ? `
-    RUBRIC CRITERIA:
-    ${rubricCriteria.map(criteria => `
-    ${criteria.description} (${criteria.points} points max):
-    ${criteria.ratings.map(rating => `- ${rating.description} (${rating.points} pts)`).join('\n')}
-    `).join('\n')}
-    ` : '';
-
-    const prompt = `
-    You are analyzing a document submission for an assignment.
-    
-    Assignment Context: ${assignmentContext}
-    ${rubricSection}
-    
+    const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
+    const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'documento submetido');
+    const prompt = `${basePrompt}
     Document Content:
     ${content}
-    
-    ${rubricCriteria ? `
-    Analyze this document submission against the provided rubric criteria. For each criteria, determine which rating level best fits the submission and provide specific feedback.
-    
-    Respond with a JSON object containing:
-    - summary: A brief overall assessment
-    - strengths: Array of specific strengths identified
-    - improvements: Array of areas that need improvement
-    - skillsIdentified: Array of skills demonstrated
-    - confidence: Confidence score of your analysis (0-1)
-    - rubricAssessments: Array of objects with {criteriaId, points, ratingDescription, comments}
-    - overallRubricScore: Total points earned
-    - maxPossibleScore: Maximum possible points
-    ` : `
-    Please analyze this document submission focusing on content quality, understanding demonstrated, and areas for improvement.
-    
-    Respond with a JSON object containing:
-    - summary: A brief overall assessment
-    - strengths: Array of specific strengths identified
-    - improvements: Array of areas that need improvement
-    - skillsIdentified: Array of skills demonstrated
-    - confidence: Confidence score of your analysis (0-1)
-    `}
-    `;
-
+    ${analysisInstructions}`;
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
       model: DEFAULT_MODEL_STR,
     });
-
-    try {
-      const response = message.content[0];
-      if (response.type === 'text') {
-        return JSON.parse(response.text);
-      }
-      throw new Error('Unexpected response format from AI');
-    } catch (error) {
-      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
-    }
+    return this.parseAIResponse(message);
   }
 
   async generateCandidateInsights(submissions: Array<{
@@ -273,7 +202,6 @@ export class AIAnalysisService {
     score: number;
   }>): Promise<CandidateInsights> {
     this.ensureAPIKey();
-
     const submissionSummaries = submissions.map(sub => ({
       assignment: sub.assignmentName,
       score: sub.score,
@@ -282,35 +210,32 @@ export class AIAnalysisService {
       improvements: sub.analysis.improvements,
       skills: sub.analysis.skillsIdentified
     }));
-
     const prompt = `
-    You are an expert technical recruiter analyzing a candidate's performance across multiple programming assignments.
+    Você é um recrutador da Link School of Business, uma faculdade de empreendedorismo do Brasil com metodologia inovadora e perspectiva global. Você é responsável por selecionar os melhores candidatos do processo de seleção.
     
-    Candidate Submission History:
+    Histórico de submissão do candidato:
     ${JSON.stringify(submissionSummaries, null, 2)}
     
-    Based on this comprehensive data, provide insights for interview preparation. Consider:
-    1. Overall technical competency
-    2. Consistency across assignments
-    3. Growth and learning trajectory
-    4. Interview readiness
-    5. Specific areas to focus on during interviews
-    
-    Respond with a JSON object containing:
-    - overallAssessment: Comprehensive assessment paragraph
-    - topStrengths: Array of top 3-5 strengths
-    - areasForImprovement: Array of key improvement areas
-    - interviewFocus: Array of topics to focus on during interviews
-    - readinessLevel: One of "interview_ready", "needs_review", or "in_progress"
-    - confidenceScore: Overall confidence in this assessment (0-1)
-    `;
+    Com base nesses dados abrangentes, forneça insights para que um entrevistador conheça bem o candidato. Considere:
+    1. Experiência com empreendedorismo e vontade de empreender ou de melhorar já existente negócios
+    2. Nível de proficiência na língua portuguesa e na língua inglesa
+    3. Habilidades técnicas e soft skills
 
+    Procure por inconsistências! Podem haver informações contraditórias ou inconsistentes.
+    
+    Responder com um objeto JSON contendo:
+    - overallAssessment: Parágrafo de avaliação abrangente
+    - topStrengths: Array com 3 a 5 principais pontos fortes
+    - areasForImprovement: Array de principais áreas de melhoria
+    - interviewFocus: Array de tópicos a serem focados durante as entrevistas
+    - readinessLevel: Um entre "interview_ready", "needs_review", ou "in_progress"
+    - confidenceScore: Confiança geral nesta avaliação (0-1)
+    `;
     const message = await anthropic.messages.create({
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
       model: DEFAULT_MODEL_STR,
     });
-
     try {
       const response = message.content[0];
       if (response.type === 'text') {
