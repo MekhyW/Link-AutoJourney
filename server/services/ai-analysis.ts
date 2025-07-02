@@ -64,10 +64,45 @@ export interface CandidateInsights {
 }
 
 export class AIAnalysisService {
+  private lastApiCall = 0;
+  private readonly RATE_LIMIT_DELAY = 3000; // 3 seconds between API calls
+  
   private ensureAPIKey() {
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
+  }
+
+  private async rateLimitedApiCall<T>(apiCall: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCall;
+    
+    if (timeSinceLastCall < this.RATE_LIMIT_DELAY) {
+      const delay = this.RATE_LIMIT_DELAY - timeSinceLastCall;
+      console.log(`Rate limiting: waiting ${delay}ms before next API call`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    this.lastApiCall = Date.now();
+    return await apiCall();
+  }
+
+  private truncateContent(content: string, maxLength: number = 8000): string {
+    if (content.length <= maxLength) return content;
+    
+    // Try to truncate at a natural break point (sentence or paragraph)
+    const truncated = content.substring(0, maxLength);
+    const lastSentenceEnd = Math.max(
+      truncated.lastIndexOf('.'),
+      truncated.lastIndexOf('\n\n'),
+      truncated.lastIndexOf('\n')
+    );
+    
+    if (lastSentenceEnd > maxLength * 0.8) {
+      return truncated.substring(0, lastSentenceEnd + 1) + '\n\n[Conteúdo truncado para análise...]';
+    }
+    
+    return truncated + '\n\n[Conteúdo truncado para análise...]';
   }
 
   private buildRubricSection(rubricCriteria?: RubricCriteria[]): string {
@@ -137,19 +172,26 @@ export class AIAnalysisService {
     rubricCriteria?: RubricCriteria[]
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
+    
+    // Truncate content to prevent token limit issues
+    const truncatedContent = this.truncateContent(content);
+    
     const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
     const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'submissão');
     const prompt = `${basePrompt}
     
     Submissão do Candidato:
-    ${content}
+    ${truncatedContent}
     ${analysisInstructions}`;
-    const message = await anthropic.messages.create({
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-      model: DEFAULT_MODEL_STR,
+    
+    return await this.rateLimitedApiCall(async () => {
+      const message = await anthropic.messages.create({
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+        model: DEFAULT_MODEL_STR,
+      });
+      return this.parseAIResponse(message);
     });
-    return this.parseAIResponse(message);
   }
 
   async analyzeImageSubmission(
@@ -172,28 +214,30 @@ export class AIAnalysisService {
     
     ${analysisInstructions}`;
     
-    const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL_STR,
-      max_tokens: 2048,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: textContent
-          },
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: "image/jpeg",
-              data: base64Image
+    return await this.rateLimitedApiCall(async () => {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 2048,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: textContent
+            },
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/jpeg",
+                data: base64Image
+              }
             }
-          }
-        ]
-      }]
+          ]
+        }]
+      });
+      return this.parseAIResponse(response);
     });
-    return this.parseAIResponse(response);
   }
 
   async analyzeDocumentSubmission(
@@ -202,18 +246,25 @@ export class AIAnalysisService {
     rubricCriteria?: RubricCriteria[]
   ): Promise<SubmissionAnalysis> {
     this.ensureAPIKey();
+    
+    // Truncate content to prevent token limit issues
+    const truncatedContent = this.truncateContent(content);
+    
     const basePrompt = this.buildBasePrompt(assignmentContext, rubricCriteria);
     const analysisInstructions = this.buildAnalysisInstructions(rubricCriteria, 'documento submetido');
     const prompt = `${basePrompt}
     Document Content:
-    ${content}
+    ${truncatedContent}
     ${analysisInstructions}`;
-    const message = await anthropic.messages.create({
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-      model: DEFAULT_MODEL_STR,
+    
+    return await this.rateLimitedApiCall(async () => {
+      const message = await anthropic.messages.create({
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+        model: DEFAULT_MODEL_STR,
+      });
+      return this.parseAIResponse(message);
     });
-    return this.parseAIResponse(message);
   }
 
   async generateCandidateInsights(submissions: Array<{
@@ -230,11 +281,15 @@ export class AIAnalysisService {
       improvements: sub.analysis.improvements,
       skills: sub.analysis.skillsIdentified
     }));
+    // Truncate submission summaries if too large
+    const summariesJson = JSON.stringify(submissionSummaries, null, 2);
+    const truncatedSummaries = this.truncateContent(summariesJson, 6000);
+    
     const prompt = `
     Você é um recrutador da Link School of Business, uma faculdade de empreendedorismo do Brasil com metodologia inovadora e perspectiva global. Você é responsável por selecionar os melhores candidatos do processo de seleção.
     
     Histórico de submissão do candidato:
-    ${JSON.stringify(submissionSummaries, null, 2)}
+    ${truncatedSummaries}
     
     Com base nesses dados abrangentes, forneça insights para que um entrevistador conheça bem o candidato. Considere:
     1. Experiência com empreendedorismo e vontade de empreender ou de melhorar já existente negócios
@@ -251,20 +306,23 @@ export class AIAnalysisService {
     - readinessLevel: Um entre "interview_ready", "needs_review", ou "in_progress"
     - confidenceScore: Confiança geral nesta avaliação (0-1)
     `;
-    const message = await anthropic.messages.create({
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }],
-      model: DEFAULT_MODEL_STR,
-    });
-    try {
-      const response = message.content[0];
-      if (response.type === 'text') {
-        return JSON.parse(response.text);
+    
+    return await this.rateLimitedApiCall(async () => {
+      const message = await anthropic.messages.create({
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+        model: DEFAULT_MODEL_STR,
+      });
+      try {
+        const response = message.content[0];
+        if (response.type === 'text') {
+          return JSON.parse(response.text);
+        }
+        throw new Error('Unexpected response format from AI');
+      } catch (error) {
+        throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}}`);
       }
-      throw new Error('Unexpected response format from AI');
-    } catch (error) {
-      throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}}`);
-    }
+    });
   }
 
   async extractTextFromPDF(buffer: Buffer): Promise<string> {

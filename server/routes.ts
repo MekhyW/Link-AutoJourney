@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { canvasAPI } from "./services/canvas-api";
 import { aiAnalysis } from "./services/ai-analysis";
+import { batchProcessor } from "./services/batch-processor";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Canvas API status
@@ -516,7 +517,7 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
 
         if (submission.content) {
           // Analyze text content using rubric if available
-          const rubricCriteria = assignment.rubricData || undefined;
+          const rubricCriteria = (assignment.rubricData && Array.isArray(assignment.rubricData)) ? assignment.rubricData as any[] : undefined;
           analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
         } else if (submission.attachments && submission.attachments.length > 0) {
           // For now, just provide basic analysis for attachments
@@ -525,10 +526,7 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
             strengths: ["File submitted on time"],
             improvements: ["Unable to analyze file content automatically"],
             skillsIdentified: ["File management"],
-            confidence: 0.3,
-            technicalQuality: 50,
-            creativity: 50,
-            completeness: 75
+            confidence: 0.3
           };
         } else {
           analysis = {
@@ -536,10 +534,7 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
             strengths: [],
             improvements: ["No submission content found"],
             skillsIdentified: [],
-            confidence: 0.1,
-            technicalQuality: 0,
-            creativity: 0,
-            completeness: 0
+            confidence: 0.1
           };
         }
 
@@ -554,8 +549,7 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
           progress: 30 + Math.round((processed / totalSubmissions) * 60)
         });
 
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Rate limiting is now handled in the AI service
       } catch (error) {
         console.error(`Error analyzing submission ${submission.id}:`, error);
         processed++;
@@ -628,7 +622,7 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
       progress: 10
     });
 
-    console.log(`Starting AI analysis for candidate ${candidateId}`);
+    console.log(`Starting optimized AI analysis for candidate ${candidateId}`);
 
     const submissions = await storage.getSubmissions({ candidateId });
     const unanalyzedSubmissions = submissions.filter(sub => !sub.isAnalyzed);
@@ -647,106 +641,13 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
       return;
     }
 
-    for (let i = 0; i < unanalyzedSubmissions.length; i++) {
-      const submission = unanalyzedSubmissions[i];
-      
-      try {
-        const assignment = await storage.getAssignment(submission.assignmentId!);
-        if (!assignment) continue;
+    // Get all assignments for proper rubric handling
+    const assignments = await storage.getAssignments();
+    
+    // Use batch processor for efficient analysis with proper rate limiting
+    await batchProcessor.analyzeSubmissionsBatch(unanalyzedSubmissions, assignments, jobId);
 
-        let analysis;
-        const assignmentContext = `${assignment.name}: ${assignment.description}`;
-
-        if (submission.content) {
-          const rubricCriteria = assignment.rubricData || undefined;
-          analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
-        } else if (submission.attachments && submission.attachments.length > 0) {
-          // Handle file attachments
-          try {
-            console.log(`Processing ${submission.attachments.length} attachments for submission ${submission.id}`);
-            const attachment = submission.attachments[0]; // Process first attachment
-            
-            if (attachment.url) {
-              console.log(`Downloading attachment: ${attachment.name} (${attachment.type})`);
-              const fileBuffer = await canvasAPI.downloadAttachment(attachment.url);
-              
-              const rubricCriteria = Array.isArray(assignment.rubricData) ? assignment.rubricData : undefined;
-              
-              // Determine file type and analyze accordingly
-              if (attachment.type?.includes('pdf')) {
-                console.log('Analyzing PDF document');
-                analysis = await aiAnalysis.analyzeDocumentSubmission(fileBuffer.toString(), assignmentContext, rubricCriteria);
-                
-                // Try PDF text extraction for better analysis
-                try {
-                  const pdfText = await aiAnalysis.extractTextFromPDF(fileBuffer);
-                  if (pdfText && pdfText.trim().length > 0) {
-                    analysis = await aiAnalysis.analyzeTextSubmission(pdfText, assignmentContext, rubricCriteria);
-                  }
-                } catch (pdfError) {
-                  console.log('PDF text extraction failed, using document analysis');
-                }
-              } else if (attachment.type?.startsWith('image/') || attachment.type?.startsWith('video/')) {
-                console.log(`Analyzing visual content: ${attachment.type}`);
-                const base64Content = fileBuffer.toString('base64');
-                analysis = await aiAnalysis.analyzeImageSubmission(base64Content, assignmentContext, rubricCriteria, attachment.type);
-              } else {
-                // For other file types, try to analyze as text if possible
-                const fileContent = fileBuffer.toString('utf8');
-                if (fileContent && fileContent.trim().length > 0) {
-                  analysis = await aiAnalysis.analyzeTextSubmission(fileContent, assignmentContext, rubricCriteria);
-                } else {
-                  analysis = {
-                    summary: `File submitted: ${attachment.name}`,
-                    strengths: ["File submitted on time"],
-                    improvements: [`Unable to analyze ${attachment.type} file type automatically`],
-                    skillsIdentified: ["File management"],
-                    confidence: 0.3
-                  };
-                }
-              }
-            } else {
-              analysis = {
-                summary: "File attachment without URL",
-                strengths: ["File submitted"],
-                improvements: ["Attachment URL not available for analysis"],
-                skillsIdentified: ["File submission"],
-                confidence: 0.2
-              };
-            }
-          } catch (attachmentError) {
-            console.error(`Error processing attachment:`, attachmentError);
-            analysis = {
-              summary: "File analysis failed",
-              strengths: ["File submitted"],
-              improvements: [`File analysis failed: ${attachmentError instanceof Error ? attachmentError.message : 'Unknown error'}`],
-              skillsIdentified: ["File submission"],
-              confidence: 0.2
-            };
-          }
-        } else {
-          analysis = {
-            summary: "No content to analyze",
-            strengths: [],
-            improvements: ["No submission content found"],
-            skillsIdentified: [],
-            confidence: 0.1
-          };
-        }
-
-        await storage.updateSubmission(submission.id, {
-          aiAnalysis: analysis,
-          isAnalyzed: true
-        });
-
-        const progress = 20 + Math.round((i + 1) / unanalyzedSubmissions.length * 60);
-        await storage.updateProcessingJob(jobId, { progress });
-
-      } catch (error) {
-        console.error(`Error analyzing submission ${submission.id}:`, error);
-      }
-    }
-
+    // Generate candidate insights after all submissions are analyzed
     const analyzedSubmissions = await storage.getSubmissions({ candidateId });
     const submissionsWithAnalysis = analyzedSubmissions.filter(sub => sub.aiAnalysis);
 
@@ -754,7 +655,7 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
       const insights = await aiAnalysis.generateCandidateInsights(
         submissionsWithAnalysis.map(sub => ({
           analysis: sub.aiAnalysis!,
-          assignmentName: "Assignment",
+          assignmentName: assignments.find(a => a.id === sub.assignmentId)?.name || "Assignment",
           score: sub.score || 0
         }))
       );
@@ -778,7 +679,7 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
     console.error(`Error in candidate analysis job ${jobId}:`, error);
     await storage.updateProcessingJob(jobId, {
       status: "failed",
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }
