@@ -6,10 +6,9 @@ import { aiAnalysis } from "./services/ai-analysis";
 import { batchProcessor } from "./services/batch-processor";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Canvas API status
   app.get("/api/status", async (req, res) => {
     try {
-      // Test Canvas API connection
+      // Health check
       await canvasAPI.getCourses();
       res.json({ 
         status: "connected", 
@@ -36,10 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalItems: 0,
         processedItems: 0,
       });
-
-      // Start async processing
-      processCourseSync(job.id);
-
+      processCourseSync(job.id); // Start async processing
       res.json({ jobId: job.id, message: "Course sync started" });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
@@ -61,8 +57,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const courseId = parseInt(req.params.courseId);
       const candidates = await storage.getCandidates(courseId);
-      
-      // Include submissions for each candidate
       const candidatesWithSubmissions = await Promise.all(
         candidates.map(async (candidate) => {
           const submissions = await storage.getSubmissions({ candidateId: candidate.id });
@@ -75,14 +69,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               };
             })
           );
-          
           return {
             ...candidate,
             submissions: submissionsWithAssignments
           };
         })
       );
-      
       res.json(candidatesWithSubmissions);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
@@ -94,13 +86,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const candidateId = parseInt(req.params.candidateId);
       const candidate = await storage.getCandidate(candidateId);
-      
-      if (!candidate) {
-        return res.status(404).json({ message: "Candidate not found" });
-      }
-
+      if (!candidate) { return res.status(404).json({ message: "Candidate not found" }); }
       const submissions = await storage.getSubmissions({ candidateId });
-      
       const submissionsWithAssignments = await Promise.all(
         submissions.map(async (sub) => {
           const assignment = await storage.getAssignment(sub.assignmentId!);
@@ -111,7 +98,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
-
       res.json({
         ...candidate,
         submissions: submissionsWithAssignments
@@ -132,17 +118,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI analysis route for a single candidate
+  // Analyse single candidate
   app.post("/api/candidates/:id/analyze", async (req, res) => {
     try {
       const candidateId = parseInt(req.params.id);
       const candidate = await storage.getCandidate(candidateId);
-      
-      if (!candidate) {
-        return res.status(404).json({ error: "Candidate not found" });
-      }
-
-      // Create processing job for candidate analysis
+      if (!candidate) { return res.status(404).json({ error: "Candidate not found" }); }
       const job = await storage.createProcessingJob({
         type: "candidate_analysis",
         status: "processing",
@@ -150,8 +131,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalItems: 0,
         error: null
       });
-
-      // Start processing in background
       processCandidateAnalysis(job.id, candidateId).catch(error => {
         console.error(`Error in candidate analysis job ${job.id}:`, error);
         storage.updateProcessingJob(job.id, {
@@ -159,7 +138,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: error.message
         });
       });
-
       res.json({
         jobId: job.id,
         message: "Candidate analysis started"
@@ -175,11 +153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const courseId = parseInt(req.params.courseId);
       const course = await storage.getCourse(courseId);
-      
-      if (!course) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-
+      if (!course) { return res.status(404).json({ message: "Course not found" }); }
       const job = await storage.createProcessingJob({
         type: "submission_analysis",
         status: "processing",
@@ -188,10 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedItems: 0,
         metadata: { courseId }
       });
-
-      // Start async processing
-      processSubmissionAnalysis(job.id, courseId);
-
+      processSubmissionAnalysis(job.id, courseId); // Start async processing
       res.json({ jobId: job.id, message: "Analysis started" });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
@@ -203,18 +174,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobId = parseInt(req.params.jobId);
       const job = await storage.getProcessingJob(jobId);
-      
-      if (!job) {
-        return res.status(404).json({ message: "Job not found" });
-      }
-
+      if (!job) { return res.status(404).json({ message: "Job not found" }); }
       res.json(job);
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
-  // Get all processing jobs
   app.get("/api/jobs", async (req, res) => {
     try {
       const jobs = await storage.getProcessingJobs();
@@ -232,17 +198,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 async function processCourseSync(jobId: number) {
   try {
     await storage.updateProcessingJob(jobId, { status: "processing" });
-    
     const canvasCourses = await canvasAPI.getCourses();
     await storage.updateProcessingJob(jobId, { 
       totalItems: canvasCourses.length,
       progress: 10 
     });
-
     let processed = 0;
     for (const canvasCourse of canvasCourses) {
       let course = await storage.getCourseByCanvasId(canvasCourse._id);
-      
       if (!course) {
         course = await storage.createCourse({
           canvasId: canvasCourse._id,
@@ -259,18 +222,12 @@ async function processCourseSync(jobId: number) {
           isActive: canvasCourse.state === 'available'
         });
       }
-
-      // Sync assignments for this course
-      const assignments = await canvasAPI.getCourseAssignments(canvasCourse._id);
+      const assignments = await canvasAPI.getCourseAssignments(canvasCourse._id); // Sync assignments for this course
       await storage.updateCourse(course.id, { assignmentCount: assignments.length });
-
-      // Sync students (candidates) for this course
-      const students = await canvasAPI.getCourseStudents(canvasCourse._id);
+      const students = await canvasAPI.getCourseStudents(canvasCourse._id); // Sync students (candidates) for this course
       console.log(`Found ${students.length} students in course ${canvasCourse.name}`);
-
       for (const student of students) {
         let candidate = await storage.getCandidateByCanvasUserId(student.id);
-        
         if (!candidate) {
           candidate = await storage.createCandidate({
             canvasUserId: student.id,
@@ -290,10 +247,8 @@ async function processCourseSync(jobId: number) {
           console.log(`Updated candidate: ${student.name} (${student.email})`);
         }
       }
-
       for (const canvasAssignment of assignments) {
         let assignment = await storage.getAssignmentByCanvasId(canvasAssignment._id);
-        
         if (!assignment) {
           assignment = await storage.createAssignment({
             canvasId: canvasAssignment._id,
@@ -307,41 +262,30 @@ async function processCourseSync(jobId: number) {
             rubricData: canvasAssignment.rubric || null
           });
         }
-
         // Fetch submissions for this assignment
         try {
           const submissions = await canvasAPI.getAssignmentSubmissions(canvasCourse._id, canvasAssignment._id);
           console.log(`Found ${submissions.length} submissions for assignment ${canvasAssignment.name}`);
-          
-          // Canvas ID analysis with ADRIELE focus
           if (submissions.length > 0) {
             const submissionUserIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id)).sort((a, b) => a - b);
             console.log(`${submissions.length} submissions - Canvas ID range: ${submissionUserIds[0]} to ${submissionUserIds[submissionUserIds.length - 1]}`);
           }
-          
           const allCandidates = await storage.getCandidates(course.id);
-          
           const candidateUserIds = allCandidates.map(c => parseInt(c.canvasUserId)).filter(id => !isNaN(id)).sort((a, b) => a - b);
           console.log(`${allCandidates.length} candidates - Canvas ID range: ${candidateUserIds[0]} to ${candidateUserIds[candidateUserIds.length - 1]}`);
-          
           // Calculate overlap
           const submissionIds = submissions.map(s => parseInt(s.user.id)).filter(id => !isNaN(id));
           const candidateIds = allCandidates.map(c => parseInt(c.canvasUserId)).filter(id => !isNaN(id));
           const overlap = submissionIds.filter(id => candidateIds.includes(id));
           console.log(`Canvas ID overlap: ${overlap.length}/${submissions.length} submissions match ${allCandidates.length} candidates`);
-          
           // Track matching statistics
           let matchedSubmissions = 0;
           let unmatchedSubmissions = 0;
-
           for (const canvasSubmission of submissions) {
-            // Be more lenient - capture any submission with a user ID
             if (!canvasSubmission.user?.id) {
               console.log(`Skipping submission ${canvasSubmission._id} - no user ID`);
               continue;
             }
-            
-            // Log submission details for debugging
             console.log(`Processing submission ${canvasSubmission._id} by ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id}):`, {
               hasBody: !!canvasSubmission.body,
               bodyLength: canvasSubmission.body?.length || 0,
@@ -349,11 +293,9 @@ async function processCourseSync(jobId: number) {
               submissionType: canvasSubmission.submissionType,
               email: canvasSubmission.user.email
             });
-
             // Comprehensive candidate matching strategy due to Canvas API user ID inconsistencies
             let candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user.id);
             let matchMethod = "canvas_id";
-            
             if (!candidate) {
               // Try email matching first (most reliable)
               const allCandidates = await storage.getCandidates(course.id);
@@ -361,13 +303,11 @@ async function processCourseSync(jobId: number) {
                 candidate = allCandidates.find(c => c.email === canvasSubmission.user.email);
                 if (candidate) matchMethod = "email";
               }
-              
               // Try exact name matching
               if (!candidate && canvasSubmission.user.name) {
                 candidate = allCandidates.find(c => c.name === canvasSubmission.user.name);
                 if (candidate) matchMethod = "name";
               }
-              
               // Try partial name matching for variations
               if (!candidate && canvasSubmission.user.name) {
                 const submissionName = canvasSubmission.user.name.toLowerCase().trim();
@@ -380,7 +320,6 @@ async function processCourseSync(jobId: number) {
                 });
                 if (candidate) matchMethod = "partial_name";
               }
-              
               if (!candidate) {
                 console.warn(`No candidate match for submission: ${canvasSubmission.user.name} (Canvas ID: ${canvasSubmission.user.id}, Email: ${canvasSubmission.user.email || 'none'})`);
                 unmatchedSubmissions++;
@@ -389,7 +328,6 @@ async function processCourseSync(jobId: number) {
                 console.log(`Matched submission via ${matchMethod}: ${candidate.name} -> ${canvasSubmission.user.name}`);
               }
             }
-
             let submission = await storage.getSubmissionByCanvasId(canvasSubmission._id);
             if (!submission) {
               await storage.createSubmission({
@@ -413,9 +351,7 @@ async function processCourseSync(jobId: number) {
               unmatchedSubmissions++;
             }
           }
-          
           console.log(`Assignment ${canvasAssignment.name}: ${matchedSubmissions} matched, ${unmatchedSubmissions} unmatched submissions`);
-          
           if (submissions.length === 0) {
             console.log(`No submissions found for assignment: ${canvasAssignment.name}`);
           }
@@ -423,14 +359,12 @@ async function processCourseSync(jobId: number) {
           console.error(`Error fetching submissions for assignment ${canvasAssignment.name}:`, error);
         }
       }
-
       processed++;
       await storage.updateProcessingJob(jobId, { 
         processedItems: processed,
         progress: Math.round((processed / canvasCourses.length) * 100)
       });
     }
-
     await storage.updateProcessingJob(jobId, { 
       status: "completed",
       progress: 100 
@@ -446,24 +380,18 @@ async function processCourseSync(jobId: number) {
 async function processSubmissionAnalysis(jobId: number, courseId: number) {
   try {
     await storage.updateProcessingJob(jobId, { status: "processing" });
-    
     const assignments = await storage.getAssignments(courseId);
     const course = await storage.getCourse(courseId);
-    
     if (!course) throw new Error("Course not found");
-
     let totalSubmissions = 0;
     let processed = 0;
-
     // First, sync all submissions
     for (const assignment of assignments) {
       const canvasSubmissions = await canvasAPI.getAssignmentSubmissions(course.canvasId, assignment.canvasId);
       totalSubmissions += canvasSubmissions.length;
-
       for (const canvasSubmission of canvasSubmissions) {
         // Create or update candidate
         let candidate = await storage.getCandidateByCanvasUserId(canvasSubmission.user._id);
-        
         if (!candidate) {
           candidate = await storage.createCandidate({
             canvasUserId: canvasSubmission.user._id,
@@ -473,10 +401,8 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
             status: "in_progress"
           });
         }
-
         // Create or update submission
         let submission = await storage.getSubmissionByCanvasId(canvasSubmission._id);
-        
         if (!submission) {
           submission = await storage.createSubmission({
             canvasId: canvasSubmission._id,
@@ -497,24 +423,19 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
         }
       }
     }
-
     await storage.updateProcessingJob(jobId, { 
       totalItems: totalSubmissions,
       progress: 30 
     });
-
     // Now analyze submissions with AI
     const allSubmissions = await storage.getSubmissions();
     const unanalyzedSubmissions = allSubmissions.filter(sub => !sub.isAnalyzed);
-
     for (const submission of unanalyzedSubmissions) {
       try {
         const assignment = await storage.getAssignment(submission.assignmentId!);
         if (!assignment) continue;
-
         let analysis;
         const assignmentContext = `${assignment.name}: ${assignment.description}`;
-
         if (submission.content) {
           // Analyze text content using rubric if available
           const rubricCriteria = (assignment.rubricData && Array.isArray(assignment.rubricData)) ? assignment.rubricData as any[] : undefined;
@@ -537,39 +458,31 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
             confidence: 0.1
           };
         }
-
         await storage.updateSubmission(submission.id, {
           aiAnalysis: analysis,
           isAnalyzed: true
         });
-
         processed++;
         await storage.updateProcessingJob(jobId, { 
           processedItems: processed,
           progress: 30 + Math.round((processed / totalSubmissions) * 60)
         });
-
-        // Rate limiting is now handled in the AI service
       } catch (error) {
         console.error(`Error analyzing submission ${submission.id}:`, error);
         processed++;
       }
     }
-
     // Generate candidate insights
     const candidates = await storage.getCandidates(courseId);
-    
     for (const candidate of candidates) {
       const candidateSubmissions = await storage.getSubmissions({ candidateId: candidate.id });
       const analyzedSubmissions = candidateSubmissions.filter(sub => sub.aiAnalysis);
-
       if (analyzedSubmissions.length > 0) {
         const submissionData = analyzedSubmissions.map(sub => ({
           analysis: sub.aiAnalysis!,
           assignmentName: assignments.find(a => a.id === sub.assignmentId)?.name || 'Unknown',
           score: sub.score || 0
         }));
-
         try {
           const submissionDataWithAnalysis = submissionData.map(s => ({
             ...s,
@@ -581,12 +494,8 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
             }
           }));
           const insights = await aiAnalysis.generateCandidateInsights(submissionDataWithAnalysis);
-          
-          const overallScore = analyzedSubmissions.reduce((sum, sub) => 
-            sum + (sub.aiAnalysis?.confidence || 0), 0) / analyzedSubmissions.length;
-          
+          const overallScore = analyzedSubmissions.reduce((sum, sub) => sum + (sub.aiAnalysis?.confidence || 0), 0) / analyzedSubmissions.length;
           const completionRate = candidateSubmissions.length / assignments.length;
-
           await storage.updateCandidate(candidate.id, {
             overallScore,
             submissionCount: candidateSubmissions.length,
@@ -601,7 +510,6 @@ async function processSubmissionAnalysis(jobId: number, courseId: number) {
         }
       }
     }
-
     await storage.updateProcessingJob(jobId, { 
       status: "completed",
       progress: 100 
@@ -621,17 +529,13 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
       status: "processing",
       progress: 10
     });
-
     console.log(`Starting optimized AI analysis for candidate ${candidateId}`);
-
     const submissions = await storage.getSubmissions({ candidateId });
     const unanalyzedSubmissions = submissions.filter(sub => !sub.isAnalyzed);
-
     await storage.updateProcessingJob(jobId, {
       totalItems: unanalyzedSubmissions.length,
       progress: 20
     });
-
     if (unanalyzedSubmissions.length === 0) {
       await storage.updateProcessingJob(jobId, {
         status: "completed",
@@ -640,17 +544,11 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
       console.log(`No submissions to analyze for candidate ${candidateId}`);
       return;
     }
-
-    // Get all assignments for proper rubric handling
     const assignments = await storage.getAssignments();
-    
-    // Use batch processor for efficient analysis with proper rate limiting
     await batchProcessor.analyzeSubmissionsBatch(unanalyzedSubmissions, assignments, jobId);
-
     // Generate candidate insights after all submissions are analyzed
     const analyzedSubmissions = await storage.getSubmissions({ candidateId });
     const submissionsWithAnalysis = analyzedSubmissions.filter(sub => sub.aiAnalysis);
-
     if (submissionsWithAnalysis.length > 0) {
       const insights = await aiAnalysis.generateCandidateInsights(
         submissionsWithAnalysis.map(sub => ({
@@ -659,7 +557,6 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
           score: sub.score || 0
         }))
       );
-
       await storage.updateCandidate(candidateId, {
         aiInsights: insights.overallAssessment,
         strengths: insights.topStrengths,
@@ -667,14 +564,11 @@ async function processCandidateAnalysis(jobId: number, candidateId: number) {
         status: insights.readinessLevel
       });
     }
-
     await storage.updateProcessingJob(jobId, {
       status: "completed",
       progress: 100
     });
-
     console.log(`Completed AI analysis for candidate ${candidateId}`);
-
   } catch (error) {
     console.error(`Error in candidate analysis job ${jobId}:`, error);
     await storage.updateProcessingJob(jobId, {

@@ -285,7 +285,7 @@ export class CanvasAPIService {
         
         // Check for next page in Link header
         const linkHeader = pageResponse.headers.get('Link');
-        nextPageUrl = null;
+        nextPageUrl = '';
         if (linkHeader) {
           const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
           if (nextMatch) {

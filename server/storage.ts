@@ -69,7 +69,7 @@ export class MemStorage implements IStorage {
           data.courses.forEach((course: Course) => {
             this.courses.set(course.id, {
               ...course,
-              createdAt: new Date(course.createdAt)
+              createdAt: course.createdAt ? new Date(course.createdAt) : new Date()
             });
           });
         }
@@ -79,8 +79,8 @@ export class MemStorage implements IStorage {
           data.candidates.forEach((candidate: Candidate) => {
             this.candidates.set(candidate.id, {
               ...candidate,
-              createdAt: new Date(candidate.createdAt),
-              updatedAt: new Date(candidate.updatedAt)
+              createdAt: candidate.createdAt ? new Date(candidate.createdAt) : new Date(),
+              updatedAt: candidate.updatedAt ? new Date(candidate.updatedAt) : new Date()
             });
           });
         }
@@ -89,7 +89,7 @@ export class MemStorage implements IStorage {
           data.assignments.forEach((assignment: Assignment) => {
             this.assignments.set(assignment.id, {
               ...assignment,
-              createdAt: new Date(assignment.createdAt),
+              createdAt: assignment.createdAt ? new Date(assignment.createdAt) : new Date(),
               dueAt: assignment.dueAt ? new Date(assignment.dueAt) : null
             });
           });
@@ -99,7 +99,7 @@ export class MemStorage implements IStorage {
           data.submissions.forEach((submission: Submission) => {
             this.submissions.set(submission.id, {
               ...submission,
-              createdAt: new Date(submission.createdAt),
+              createdAt: submission.createdAt ? new Date(submission.createdAt) : new Date(),
               submittedAt: submission.submittedAt ? new Date(submission.submittedAt) : null
             });
           });

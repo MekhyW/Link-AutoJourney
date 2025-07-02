@@ -26,45 +26,28 @@ export class BatchProcessor {
   }
 
   private async processBatch() {
-    if (this.isProcessing || this.processingQueue.length === 0) {
-      return;
-    }
-
+    if (this.isProcessing || this.processingQueue.length === 0) { return; }
     this.isProcessing = true;
-    
     while (this.processingQueue.length > 0) {
-      // Take a batch of tasks
       const batch = this.processingQueue.splice(0, this.BATCH_SIZE);
-      
       console.log(`Processing batch of ${batch.length} submissions`);
-      
-      // Process batch in parallel
       const promises = batch.map(task => task().catch(error => {
         console.error('Batch task failed:', error);
-        return null; // Continue processing other tasks
+        return null;
       }));
-      
       await Promise.all(promises);
-      
-      // Wait between batches if there are more tasks
       if (this.processingQueue.length > 0) {
         console.log(`Waiting ${this.BATCH_DELAY}ms before next batch...`);
         await new Promise(resolve => setTimeout(resolve, this.BATCH_DELAY));
       }
     }
-    
     this.isProcessing = false;
   }
 
   async analyzeSubmissionsBatch(submissions: any[], assignments: any[], jobId: number) {
     const unanalyzedSubmissions = submissions.filter(sub => !sub.isAnalyzed);
-    
-    if (unanalyzedSubmissions.length === 0) {
-      return [];
-    }
-
+    if (unanalyzedSubmissions.length === 0) { return []; }
     console.log(`Starting batch analysis of ${unanalyzedSubmissions.length} submissions`);
-    
     const analysisPromises = unanalyzedSubmissions.map((submission, index) => 
       this.addToQueue(async () => {
         try {
@@ -73,10 +56,8 @@ export class BatchProcessor {
             console.log(`No assignment found for submission ${submission.id}`);
             return null;
           }
-
           let analysis;
           const assignmentContext = `${assignment.name}: ${assignment.description}`;
-
           if (submission.content) {
             const rubricCriteria = assignment.rubricData || undefined;
             analysis = await aiAnalysis.analyzeTextSubmission(submission.content, assignmentContext, rubricCriteria);
@@ -91,16 +72,12 @@ export class BatchProcessor {
               confidence: 0.1
             };
           }
-
           await storage.updateSubmission(submission.id, {
             aiAnalysis: analysis,
             isAnalyzed: true
           });
-
-          // Update progress
-          const progress = 20 + Math.round((index + 1) / unanalyzedSubmissions.length * 60);
+          const progress = 20 + Math.round((index + 1) / unanalyzedSubmissions.length * 60); // Update progress
           await storage.updateProcessingJob(jobId, { progress });
-
           console.log(`Analyzed submission ${submission.id} (${index + 1}/${unanalyzedSubmissions.length})`);
           return analysis;
         } catch (error) {
@@ -109,7 +86,6 @@ export class BatchProcessor {
         }
       })
     );
-
     const results = await Promise.all(analysisPromises);
     return results.filter(result => result !== null);
   }
@@ -117,7 +93,6 @@ export class BatchProcessor {
   private async processSubmissionAttachment(submission: any, assignment: any, assignmentContext: string) {
     try {
       const attachment = submission.attachments[0];
-      
       if (!attachment.url) {
         return {
           summary: "File attachment without URL",
@@ -127,11 +102,9 @@ export class BatchProcessor {
           confidence: 0.2
         };
       }
-
       console.log(`Processing attachment: ${attachment.name} (${attachment.type})`);
       const fileBuffer = await canvasAPI.downloadAttachment(attachment.url);
       const rubricCriteria = Array.isArray(assignment.rubricData) ? assignment.rubricData : undefined;
-      
       if (attachment.type?.includes('pdf')) {
         try {
           const pdfText = await aiAnalysis.extractTextFromPDF(fileBuffer);
@@ -151,7 +124,6 @@ export class BatchProcessor {
           return await aiAnalysis.analyzeTextSubmission(fileContent, assignmentContext, rubricCriteria);
         }
       }
-      
       return {
         summary: `File submitted: ${attachment.name}`,
         strengths: ["File submitted on time"],
