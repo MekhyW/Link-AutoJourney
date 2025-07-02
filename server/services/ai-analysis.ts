@@ -155,13 +155,27 @@ export class AIAnalysisService {
   }
 
   private parseAIResponse(response: Anthropic.Messages.Message): SubmissionAnalysis {
+    const responseContent = response.content[0];
     try {
-      const responseContent = response.content[0];
       if (responseContent.type === 'text') {
-        return JSON.parse(responseContent.text);
+        let text = responseContent.text.trim();
+        
+        // Remove markdown code blocks if present
+        if (text.startsWith('```json')) {
+          text = text.replace(/^```json\s*/, '');
+        }
+        if (text.startsWith('```')) {
+          text = text.replace(/^```\s*/, '');
+        }
+        if (text.endsWith('```')) {
+          text = text.replace(/\s*```$/, '');
+        }
+        
+        return JSON.parse(text);
       }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
+      console.error('AI Response parsing failed:', responseContent?.type === 'text' ? responseContent.text : 'No text content');
       throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
     }
   }
@@ -313,13 +327,28 @@ export class AIAnalysisService {
         messages: [{ role: 'user', content: prompt }],
         model: DEFAULT_MODEL_STR,
       });
+      
+      const responseContent = message.content[0];
       try {
-        const response = message.content[0];
-        if (response.type === 'text') {
-          return JSON.parse(response.text);
+        if (responseContent.type === 'text') {
+          let text = responseContent.text.trim();
+          
+          // Remove markdown code blocks if present
+          if (text.startsWith('```json')) {
+            text = text.replace(/^```json\s*/, '');
+          }
+          if (text.startsWith('```')) {
+            text = text.replace(/^```\s*/, '');
+          }
+          if (text.endsWith('```')) {
+            text = text.replace(/\s*```$/, '');
+          }
+          
+          return JSON.parse(text);
         }
         throw new Error('Unexpected response format from AI');
       } catch (error) {
+        console.error('Candidate insights parsing failed:', responseContent?.type === 'text' ? responseContent.text : 'No text content');
         throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}}`);
       }
     });
