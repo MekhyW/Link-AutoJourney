@@ -139,9 +139,24 @@ export class AIAnalysisService {
   private parseAIResponse(response: Anthropic.Messages.Message): SubmissionAnalysis {
     try {
       const responseContent = response.content[0];
-      if (responseContent.type === 'text') { return JSON.parse(responseContent.text); }
+      if (responseContent.type === 'text') {
+        let text = responseContent.text.trim();
+        if (text.startsWith('```json') || text.startsWith('```')) { // Check if the response is wrapped in markdown code blocks
+          const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/); // Extract JSON from markdown code blocks
+          if (jsonMatch && jsonMatch[1]) {
+            text = jsonMatch[1].trim();
+          } else { // Fallback: remove first and last lines if they contain backticks
+            const lines = text.split('\n');
+            if (lines[0].includes('```')) lines.shift();
+            if (lines[lines.length - 1].includes('```')) lines.pop();
+            text = lines.join('\n').trim();
+          }
+        }
+        return JSON.parse(text);
+      }
       throw new Error('Unexpected response format from AI');
     } catch (error) {
+      console.error('Raw AI response:', response.content[0]);
       throw new Error(`Failed to parse AI response: ${(error as Error).message ?? 'Unknown error'}`);
     }
   }
