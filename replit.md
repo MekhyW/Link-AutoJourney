@@ -92,7 +92,6 @@ Required environment variables:
   - Created batch processing system for submissions (3 concurrent, 5-second delays between batches)
   - Enhanced error handling for submission analysis pipeline
   - Optimized candidate analysis to use batch processor instead of sequential processing
-  - Fixed JSON parsing errors by handling markdown code blocks in AI responses
 
 ## Technical Notes
 - Uses Canvas REST API v1 for reliable data access
